@@ -1,0 +1,48 @@
+Rice2k Macro Studio v1.0 Changelog
+
+STARTUP / LAUNCHER
+- Fixed startup-blocking missing choose_recording method
+- Added missing open_raw_editor method
+- Rebuilt Run_Rice2k_Macro_Studio.bat as a self-diagnosing launcher
+- Detects py -3 and python
+- Detects Microsoft Store/no-real-Python situations
+- Verifies Tkinter
+- Repairs missing pip dependencies
+- Runs py_compile before startup
+- Detects incomplete ZIP extraction
+- Added Run_Setup_Diagnostics.bat
+- Launcher keeps errors visible instead of flashing closed
+- Launcher always attempts to write launcher_log.txt
+
+CRASH / ERROR LOGGING
+- Added main-thread uncaught exception logging
+- Added worker-thread exception logging
+- Added Tkinter callback exception logging
+- Added startup_log.txt
+- Added faulthandler.log where supported
+- Added fallback error/startup logging under TEMP when Documents is unavailable
+
+SETTINGS
+- Invalid settings are sanitized instead of breaking startup
+- Corrupt settings JSON falls back safely
+- Invalid numeric ranges are clamped
+- Invalid/duplicate hotkeys reset safely
+- Settings writes use a temporary file before replacement
+- save_vars tolerates invalid in-progress Spinbox contents
+
+GUI / EDITOR
+- Added functional Raw Action Editor
+- Fixed Raw Action Editor row overlap
+- Fixed live speed-value display
+- Reduced settings writes while dragging speed slider
+- Verified Dashboard, Recordings, Smart Targets, Exports, Automation, Calendar Guide, Diagnostics, Settings, Help, Raw Editor and Error Log under a virtual Tk display
+
+INPUT / TARGETING
+- Scroll-only recording now works without Mouse clicks enabled
+- Mouse movement-only listener is supported
+- Target matching now requires compatible process + title when both were recorded
+- Prevents same-process wrong-window/tab matches from being accepted too easily
+
+PACKAGE
+- Removed obsolete Browser_Capture_Helper.html
+- Desktop shortcut targets EXE when built or reliable BAT launcher otherwise
