@@ -19,8 +19,9 @@ set "LOG=%LOGDIR%\setup_diagnostics.txt"
 echo Running setup diagnostics...
 echo.
 
-if not exist "rice2k_macro_studio.py" >>"%LOG%" echo ERROR: rice2k_macro_studio.py missing - extract the full ZIP.
-if not exist "requirements.txt" >>"%LOG%" echo ERROR: requirements.txt missing - extract the full ZIP.
+if not exist "rice2k_macro_studio.py" >>"%LOG%" echo ERROR: rice2k_macro_studio.py missing - extract or clone the full repository.
+if not exist "src_fragments\part_01.pyfrag" >>"%LOG%" echo ERROR: src_fragments missing - extract or clone the full repository.
+if not exist "requirements.txt" >>"%LOG%" echo ERROR: requirements.txt missing - extract or clone the full repository.
 
 where py >>"%LOG%" 2>&1
 where python >>"%LOG%" 2>&1
@@ -45,6 +46,7 @@ if defined PY_CMD (
   %PY_CMD% -c "import screeninfo; print('screeninfo OK')" >>"%LOG%" 2>&1
   %PY_CMD% -c "import pywinauto; print('pywinauto OK', pywinauto.__version__)" >>"%LOG%" 2>&1
   %PY_CMD% -m py_compile rice2k_macro_studio.py >>"%LOG%" 2>&1
+  %PY_CMD% -c "from pathlib import Path; parts=sorted(Path('src_fragments').glob('part_*.pyfrag')); print('source fragments', len(parts)); assert len(parts)==14, f'Expected 14 source fragments, found {len(parts)}'; compile(''.join(x.read_text(encoding='utf-8') for x in parts), 'rice2k_macro_studio_full.py', 'exec'); print('full application source OK')" >>"%LOG%" 2>&1
 ) else (
   >>"%LOG%" echo ERROR: No working Python interpreter detected.
 )
