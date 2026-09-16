@@ -1,11 +1,15 @@
 """
-Rice2k Macro Studio v1.3 source loader.
+Rice2k Macro Studio v1.4.1 source loader.
 
 The validated base application source remains in ordered fragments under src_fragments/.
 Version patches under src_patches/ are inserted in filename order immediately before
-main() is invoked. v1.1 adds website recording filters; v1.2 added compact scrolling and
-state-safe styling; v1.3 rebuilds the shell and Dashboard to match the approved visual
-mockup with branded cards, icon navigation, footer status, and stronger visual hierarchy.
+main() is invoked.
+
+Release patch lineage:
+- v1.1 website recording filters
+- v1.2 compact scrolling and state-safe styling
+- v1.3 mockup-matched shell and Dashboard
+- v1.4.1 theme polish, Neo Green, compact cleanup, and centered page layouts
 """
 from pathlib import Path
 import sys
