@@ -1,0 +1,728 @@
+# Rice2k Macro Studio v1.4.1 Compact Cleanup patch
+# Adds Neo Green, softens Light, tightens Dashboard/sidebar/options, and centers major content pages.
+
+APP_VERSION = "1.4.1 Compact Cleanup"
+
+THEMES.clear()
+THEMES.update({
+    "dark": {
+        "bg": "#08111F", "panel": "#0D1A2B", "panel2": "#0A1625",
+        "panel3": "#10243A", "card": "#0F1E31", "text": "#EEF5FF", "sub": "#94B1D0",
+        "accent": "#178BFF", "accent_hover": "#2C9BFF", "accent_pressed": "#0D72D8",
+        "accent2": "#39D4C4", "warning": "#FFC857", "danger": "#FF4D5A",
+        "danger_hover": "#FF6671", "success": "#35D487", "border": "#21496D", "border_soft": "#17344F",
+        "input_bg": "#091523", "select_bg": "#164C7D", "disabled_bg": "#152438",
+        "disabled_fg": "#5F7790"
+    },
+    "light": {
+        "bg": "#E8EEF5", "panel": "#F7FAFD", "panel2": "#EDF3F9",
+        "panel3": "#DCE7F2", "card": "#F2F6FB", "text": "#18324B", "sub": "#5D7288",
+        "accent": "#0E7C86", "accent_hover": "#15939E", "accent_pressed": "#0B6B74",
+        "accent2": "#36CFA2", "warning": "#8D6400", "danger": "#B84A61",
+        "danger_hover": "#C96076", "success": "#21895F", "border": "#C8D8E7", "border_soft": "#D9E4EF",
+        "input_bg": "#FFFFFF", "select_bg": "#D6E9F7", "disabled_bg": "#E4EBF2",
+        "disabled_fg": "#8A98A6"
+    },
+    "neo_green": {
+        "bg": "#06110C", "panel": "#0A1A14", "panel2": "#08140F",
+        "panel3": "#0F2B1E", "card": "#0B1E15", "text": "#D8FFE8", "sub": "#7DBA98",
+        "accent": "#39FF88", "accent_hover": "#5DFF9E", "accent_pressed": "#20D66F",
+        "accent2": "#00E5A8", "warning": "#D6FF57", "danger": "#FF5C75",
+        "danger_hover": "#FF768B", "success": "#45E7A1", "border": "#1D6A45", "border_soft": "#133E2A",
+        "input_bg": "#07120D", "select_bg": "#174F34", "disabled_bg": "#102118",
+        "disabled_fg": "#5E7F6E"
+    },
+})
+
+
+def _v141_show_recordings(self):
+    self.current_screen.set("Recordings")
+    self.clear_content()
+    f = self.scroll_frame(self.panel())
+    f.columnconfigure(0, weight=1)
+    body = ttk.Frame(f, style="Panel.TFrame")
+    body.grid(row=0, column=0, pady=4)
+    body.columnconfigure(0, weight=1)
+
+    ttk.Label(body, text="Saved Recordings", style="Section.TLabel").grid(row=0, column=0, sticky="w", padx=12, pady=(4, 2))
+    ttk.Label(body, text="Load, replay, recover, or export saved recordings. Selecting a file does not run it until you press Play.", style="Help.TLabel", wraplength=920, justify="left").grid(row=1, column=0, sticky="w", padx=12, pady=(0, 4))
+
+    list_card = ttk.LabelFrame(body, text="Recording Library")
+    list_card.grid(row=2, column=0, sticky="ew", padx=12, pady=4)
+    list_card.columnconfigure(0, weight=1)
+    list_card.rowconfigure(0, weight=1)
+    self.recording_list = tk.Listbox(
+        list_card,
+        height=14,
+        bg=self.colors()["panel2"],
+        fg=self.colors()["text"],
+        selectbackground=self.colors()["accent"],
+        selectforeground=("#06131F" if self.theme_var.get() == "neo_green" else self.colors()["text"]),
+        font=(self.mono_font, 9),
+        relief="flat",
+        highlightthickness=0,
+        activestyle="none",
+    )
+    self.recording_list.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=10)
+    self.tip(self.recording_list, "Saved recording files. Select one, then use Load, Play, or Export Selected.")
+    sb = ttk.Scrollbar(list_card, orient="vertical", command=self.recording_list.yview, style="Vertical.TScrollbar")
+    sb.grid(row=0, column=1, sticky="ns", padx=(0, 10), pady=10)
+    self.recording_list.configure(yscrollcommand=sb.set)
+
+    bar = ttk.Frame(body, style="Panel.TFrame")
+    bar.grid(row=3, column=0, sticky="ew", padx=12, pady=(2, 8))
+    buttons = [
+        ("Refresh", self.refresh_recordings, "Refresh the list from the Recordings folder."),
+        ("Load", self.load_selected, "Load the selected recording into memory without playing it."),
+        ("Play", self.play_selected, "Load the selected recording and open the playback confirmation screen."),
+        ("Export Selected", self.export_selected_recording, "Load the selected recording and open the Export page."),
+        ("Recover Journal", self.recover_journal, "Recover actions from the incremental crash-recovery journal."),
+        ("Open Folder", lambda: open_folder(RECORDINGS_DIR), "Open the Recordings folder in File Explorer."),
+    ]
+    for label, cmd, hint in buttons:
+        b = ttk.Button(bar, text=label, command=cmd)
+        b.pack(side="left", padx=4)
+        self.tip(b, hint)
+    self.refresh_recordings()
+
+
+def _v141_show_automation(self):
+    self.current_screen.set("Automation")
+    self.clear_content()
+    outer = self.scroll_frame(self.panel())
+    outer.columnconfigure(0, weight=1)
+    body = ttk.Frame(outer, style="Panel.TFrame")
+    body.grid(row=0, column=0, pady=6)
+    body.columnconfigure(0, weight=1)
+
+    ttk.Label(body, text="Automation Mode", style="Section.TLabel").grid(row=0, column=0, sticky="w", padx=12, pady=(6, 2))
+    self.help_text(body, "Modes are presets. They change what gets recorded and how strictly playback watches the target application.", 1, columnspan=1, wrap=960)
+
+    row = 2
+    modes = [
+        ("click_fast", "Click-Only Fast", "Best default: clicks + scroll + optional keyboard, without noisy mouse movement."),
+        ("physical", "Physical Replay", "Records/replays physical mouse movement, clicks, scroll, and optional keyboard."),
+        ("browser", "Browser Element Capture", "Creates a bookmarklet helper that captures URL/title/role/labels/selectors without input values."),
+        ("window_aware", "Window-Aware", "Uses process/window metadata and pauses if the target changes."),
+    ]
+    for value, title, desc in modes:
+        box = ttk.LabelFrame(body, text=title)
+        box.grid(row=row, column=0, sticky="ew", padx=12, pady=4)
+        rb = ttk.Radiobutton(box, text=desc, value=value, variable=self.mode_var, command=lambda v=value: self.apply_mode(v), style="Compact.TRadiobutton")
+        rb.pack(anchor="w", padx=12, pady=8)
+        self.tip(rb, desc)
+        row += 1
+
+    website_box = ttk.LabelFrame(body, text="Website Recording Filters")
+    website_box.grid(row=row, column=0, sticky="ew", padx=12, pady=4)
+    ttk.Label(website_box, text="Choose exactly which browser actions the Smart Capture helper records. These filters do not change normal Windows recording. Regenerate the Browser Capture Helper after changing defaults.", style="Help.TLabel", wraplength=900, justify="left").pack(anchor="w", padx=12, pady=(8, 4))
+
+    checks_wrap = ttk.Frame(website_box, style="Panel.TFrame")
+    checks_wrap.pack(anchor="w", padx=12, pady=(2, 2))
+    columns = [ttk.Frame(checks_wrap, style="Panel.TFrame") for _ in range(2)]
+    for i, col in enumerate(columns):
+        col.grid(row=0, column=i, sticky="nw", padx=(0 if i == 0 else 34, 0))
+    website_checks = [
+        ("Clicks", self.website_clicks_var, "Record semantic website click actions such as buttons and links."),
+        ("Scroll", self.website_scroll_var, "Record page or scrollable-element scroll positions."),
+        ("Click location", self.website_click_location_var, "Include x/y coordinates with click records. Turn this off for semantic-only website clicks."),
+        ("Text input", self.website_input_var, "Record the final value of non-sensitive text fields. Password, token, secret, OTP, and similar fields are always blocked."),
+        ("Selections", self.website_selection_var, "Record dropdown selections and checkbox/radio state changes."),
+    ]
+    for i, (label, var, hint) in enumerate(website_checks):
+        target = columns[0] if i < 3 else columns[1]
+        cb = ttk.Checkbutton(target, text=label, variable=var, command=self.save_vars, style="Compact.TCheckbutton")
+        cb.pack(anchor="w", pady=3)
+        self.tip(cb, hint)
+    ttk.Label(website_box, text="Text input is OFF by default for privacy. Sensitive credential/security fields are never recorded.", style="Warn.TLabel", wraplength=900, justify="left").pack(anchor="w", padx=12, pady=(4, 6))
+    presets = ttk.Frame(website_box, style="Panel.TFrame")
+    presets.pack(anchor="w", padx=10, pady=(0, 9))
+    for label, preset in [("All Safe", "all_safe"), ("Clicks Only", "clicks_only"), ("Click + Location", "click_location"), ("Scroll Only", "scroll_only"), ("Input Only", "input_only"), ("Selection Only", "selection_only")]:
+        ttk.Button(presets, text=label, command=lambda p=preset: self.set_website_capture_preset(p)).pack(side="left", padx=3)
+    row += 1
+
+    calendar_box = ttk.LabelFrame(body, text="Calendar + Dynamic Dates")
+    calendar_box.grid(row=row, column=0, sticky="ew", padx=12, pady=4)
+    calendar_box.columnconfigure(0, weight=1)
+    ttk.Label(calendar_box, text="Use a TODAY rule when a calendar step should select the actual current date every time instead of replaying the date originally recorded.", style="Help.TLabel", wraplength=740, justify="left").grid(row=0, column=0, sticky="w", padx=12, pady=8)
+    cal_btn = ttk.Button(calendar_box, text="Open Calendar Guide", style="Accent.TButton", command=self.show_calendar_guide)
+    cal_btn.grid(row=0, column=1, sticky="e", padx=12, pady=8)
+    self.tip(cal_btn, "Open step-by-step instructions for Windows/native calendars and website date pickers.")
+    row += 1
+
+    smart_box = ttk.LabelFrame(body, text="Smart Target Recognition")
+    smart_box.grid(row=row, column=0, sticky="ew", padx=12, pady=4)
+    cbwrap = ttk.Frame(smart_box, style="Panel.TFrame")
+    cbwrap.pack(anchor="w", padx=12, pady=7)
+    st1 = ttk.Checkbutton(cbwrap, text="Record Windows UI Automation target details", variable=self.smart_target_var, command=self.save_vars, style="Compact.TCheckbutton")
+    st1.grid(row=0, column=0, sticky="w", padx=(0, 30), pady=3)
+    self.tip(st1, "On clicks, try to record the actual Windows control name/type/AutomationId instead of relying only on coordinates.")
+    st2 = ttk.Checkbutton(cbwrap, text="Try semantic target first during playback", variable=self.smart_playback_var, command=self.save_vars, style="Compact.TCheckbutton")
+    st2.grid(row=0, column=1, sticky="w", pady=3)
+    self.tip(st2, "For recognized Windows controls, try UI Automation invoke/select before falling back to physical coordinates.")
+    st3 = ttk.Checkbutton(cbwrap, text="Detect / allow dynamic Calendar TODAY rules", variable=self.calendar_today_var, command=self.save_vars, style="Compact.TCheckbutton")
+    st3.grid(row=1, column=0, columnspan=2, sticky="w", pady=3)
+    self.tip(st3, "Lets calendar clicks be marked TODAY so future runs search for today's date rather than reusing the date originally recorded.")
+    row += 1
+
+    lower = ttk.Frame(body, style="Panel.TFrame")
+    lower.grid(row=row, column=0, sticky="ew", padx=12, pady=4)
+    ttk.Label(lower, text="Run behavior", style="Panel.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 12), pady=4)
+    run_box = ttk.Combobox(lower, textvariable=self.run_behavior_var, values=["manual", "after_save", "on_start"], state="readonly", width=18)
+    run_box.grid(row=0, column=1, sticky="w", pady=4)
+    self.tip(run_box, "Manual waits for you to press Play. After Save can replay a recording after it is saved. On Start can load/run the last recording at app launch.")
+    row += 1
+
+    safety = ttk.LabelFrame(body, text="Playback Safety")
+    safety.grid(row=row, column=0, sticky="ew", padx=12, pady=4)
+    validate = ttk.Checkbutton(safety, text="Validate target before click/scroll", variable=self.target_validation_var, command=self.save_vars, style="Compact.TCheckbutton")
+    validate.pack(anchor="w", padx=12, pady=(8, 2))
+    self.tip(validate, "Compare the recorded process/window with the current foreground target before a click or scroll.")
+    pause_target = ttk.Checkbutton(safety, text="Pause if target changes", variable=self.pause_target_var, command=self.save_vars, style="Compact.TCheckbutton")
+    pause_target.pack(anchor="w", padx=12, pady=(2, 8))
+    self.tip(pause_target, "Pause playback instead of clicking into the wrong application when target validation detects a change.")
+    row += 1
+
+    buttons = ttk.Frame(body, style="Panel.TFrame")
+    buttons.grid(row=row, column=0, sticky="w", padx=12, pady=(5, 6))
+    ttk.Button(buttons, text="Create Browser Capture Helper", command=self.create_browser_helper).pack(side="left", padx=4)
+    ttk.Button(buttons, text="Open Website Actions Folder", command=lambda: open_folder(WEBSITE_ACTIONS_DIR)).pack(side="left", padx=4)
+    row += 1
+
+    note = "Physical replay controls the active desktop. For true simultaneous work, use browser element automation, a VM, Remote Desktop, another Windows session, or another PC."
+    ttk.Label(body, text=note, style="Warn.TLabel", wraplength=900, justify="left").grid(row=row, column=0, sticky="w", padx=12, pady=(2, 10))
+
+
+def _v141_show_calendar_guide(self):
+    self.current_screen.set("Calendar Guide")
+    self.clear_content()
+    outer = self.scroll_frame(self.panel())
+    outer.columnconfigure(0, weight=1)
+    body = ttk.Frame(outer, style="Panel.TFrame")
+    body.grid(row=0, column=0, pady=6)
+    body.columnconfigure(0, weight=1)
+
+    today = datetime.date.today()
+    today_display = today.strftime("%A, %B %d, %Y")
+
+    ttk.Label(body, text="Calendar + Dynamic Date Guide", style="Section.TLabel").grid(row=0, column=0, sticky="w", padx=12, pady=(6, 2))
+    ttk.Label(body, text=f"Use dynamic calendar rules when a recording must choose the date that is current when it runs. Today's test date is: {today_display}.", style="Help.TLabel", wraplength=920, justify="left").grid(row=1, column=0, sticky="w", padx=12, pady=(0, 6))
+
+    sections = [
+        ("Why not use coordinates?", "A calendar changes position as months change. Clicking the same x/y coordinate tomorrow or next month can choose the wrong day. The TODAY rule stores the intention 'select today's date' and searches for the date again during replay."),
+        ("Windows / native application calendar", "1. Record yourself opening the calendar and clicking the date. 2. Open Smart Targets + Actions. 3. Select the recognized date click. 4. Click Mark Selected = TODAY. 5. Click Save Edited Copy. 6. On future replay, Windows UI Automation searches the current target window for today's accessible date label. If the app was closed and reopened, Rice2k Macro Studio can re-find the window by process/title instead of depending only on the old HWND."),
+        ("Website calendar / date picker", "1. Open Automation and create the Browser Element Capture helper. 2. Start the Rice2k Macro Studio Smart Capture bookmarklet on the website. 3. Open the date picker. 4. Click Mark Next = TODAY in the floating capture panel. 5. Click today's date. 6. Download or copy the capture JSON. 7. The browser replay recalculates today's date and looks for semantic date attributes/labels instead of the original coordinate."),
+        ("How website TODAY detection works", "The browser helper checks strong signals first: aria-current='date', data-date='YYYY-MM-DD', datetime='YYYY-MM-DD', time[datetime], accessible labels/titles containing today's month/day/year, and then a calendar-scoped day-number fallback. If the calendar provides a clear Today/Current Date control, that can also be used."),
+        ("How Windows TODAY detection works", "Windows smart-target playback first resolves the current application window. It then scores UI Automation descendants by today's accessible date label, control type and class. A bare day number such as '16' is only used as a fallback when it is unique among compatible controls."),
+        ("If TODAY cannot be found", "The app should not guess blindly. Open the calendar manually and inspect Smart Targets. Make sure Windows UI Automation is available, or use Browser Element Capture for websites. Some custom-drawn calendars expose no accessible date information; those may require coordinate playback."),
+        ("Recurring calendar jobs", "TODAY is useful for 'pick today's date'. A future enhancement can use rules such as TOMORROW, +N days, first/last day of month, next weekday, or a date from a field."),
+    ]
+    row = 2
+    for title, desc in sections:
+        box = ttk.LabelFrame(body, text=title)
+        box.grid(row=row, column=0, sticky="ew", padx=12, pady=4)
+        ttk.Label(box, text=desc, style="Help.TLabel", wraplength=900, justify="left").pack(anchor="w", padx=12, pady=10)
+        row += 1
+
+    test_box = ttk.LabelFrame(body, text="Calendar TODAY Self-Test")
+    test_box.grid(row=row, column=0, sticky="ew", padx=12, pady=5)
+    test_box.columnconfigure(1, weight=1)
+    b_test = ttk.Button(test_box, text="Run Calendar Test", style="Accent.TButton", command=self.run_calendar_today_test)
+    b_test.grid(row=0, column=0, sticky="w", padx=12, pady=10)
+    self.tip(b_test, "Test the app's current-date label matching and report whether Windows UI Automation is available.")
+    ttk.Label(test_box, textvariable=self.calendar_test_var, style="Panel.TLabel", wraplength=700, justify="left").grid(row=0, column=1, sticky="w", padx=12, pady=10)
+    row += 1
+
+    buttons = ttk.Frame(body, style="Panel.TFrame")
+    buttons.grid(row=row, column=0, sticky="w", padx=12, pady=(4, 14))
+    ttk.Button(buttons, text="Open Smart Targets", command=self.show_smart_actions).pack(side="left", padx=4)
+    ttk.Button(buttons, text="Create Browser Helper", command=self.create_browser_helper).pack(side="left", padx=4)
+    ttk.Button(buttons, text="Open Website Actions Folder", command=lambda: open_folder(WEBSITE_ACTIONS_DIR)).pack(side="left", padx=4)
+
+
+def _v141_show_settings(self):
+    self.current_screen.set("Settings")
+    self.clear_content()
+    outer = self.scroll_frame(self.panel())
+    outer.columnconfigure(0, weight=1)
+    body = ttk.Frame(outer, style="Panel.TFrame")
+    body.grid(row=0, column=0, pady=6)
+    body.columnconfigure(1, weight=1)
+    ttk.Label(body, text="Settings", style="Section.TLabel").grid(row=0, column=0, columnspan=2, sticky="w", padx=12, pady=(6, 2))
+    self.help_text(body, "Customize appearance, countdown, timing behavior, and global hotkeys. Hotkeys must be unique.", 1, columnspan=2, wrap=920)
+    ttk.Label(body, text="Theme", style="Panel.TLabel").grid(row=2, column=0, sticky="w", padx=12, pady=4)
+    theme_box = ttk.Combobox(body, textvariable=self.theme_var, values=["dark", "neo_green", "light"], state="readonly", width=16)
+    theme_box.grid(row=2, column=1, sticky="w", padx=12, pady=6)
+    self.tip(theme_box, "Dark = default navy UI. Neo Green = black / neon green. Light = softened light theme without harsh white panels. Full theme refresh occurs on next app launch.")
+    ttk.Label(body, text="Countdown", style="Panel.TLabel").grid(row=3, column=0, sticky="w", padx=12, pady=4)
+    countdown_box = ttk.Spinbox(body, from_=0, to=30, textvariable=self.countdown_var, width=8, command=self.save_vars)
+    countdown_box.grid(row=3, column=1, sticky="w", padx=12, pady=6)
+    self.tip(countdown_box, "Seconds to count down before playback begins, giving you time to switch to the target window.")
+    ttk.Checkbutton(body, text="Human-like small timing variation", variable=self.human_like_var, command=self.save_vars, style="Compact.TCheckbutton").grid(row=4, column=0, columnspan=2, sticky="w", padx=12, pady=4)
+    ttk.Separator(body).grid(row=5, column=0, columnspan=2, sticky="ew", padx=18, pady=10)
+    ttk.Label(body, text="Hotkeys", style="Section.TLabel").grid(row=6, column=0, columnspan=2, sticky="w", padx=12, pady=4)
+    choices = ["f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "esc"]
+    row = 7
+    for name, label in [("start", "Start"), ("stop", "Stop + Save"), ("pause", "Pause / Resume"), ("play", "Play"), ("emergency", "Emergency Stop")]:
+        ttk.Label(body, text=label, style="Panel.TLabel").grid(row=row, column=0, sticky="w", padx=12, pady=4)
+        hotkey_box = ttk.Combobox(body, textvariable=self.hotkey_vars[name], values=choices, state="readonly", width=10)
+        hotkey_box.grid(row=row, column=1, sticky="w", padx=12, pady=5)
+        self.tip(hotkey_box, f"Global hotkey assigned to {label}. Each action must use a unique key.")
+        row += 1
+    ttk.Button(body, text="Save Settings + Restart Hotkeys", command=self.save_and_restart_hotkeys).grid(row=row, column=0, sticky="ew", padx=18, pady=10)
+    ttk.Button(body, text="Open App Folder", command=lambda: open_folder(APP_DIR)).grid(row=row, column=1, sticky="ew", padx=18, pady=10)
+    row += 1
+    ttk.Label(body, text="Theme changes apply fully the next time the app opens.", style="Help.TLabel").grid(row=row, column=0, columnspan=2, sticky="w", padx=18, pady=(0, 10))
+
+
+def _v13_build_style(self):
+    c = self.colors()
+    self.configure(bg=c["bg"])
+    self.option_add("*Font", (self.ui_font, 10))
+    self.option_add("*TCombobox*Listbox.font", (self.ui_font, 10))
+    self.option_add("*Listbox.font", (self.ui_font, 10))
+
+    self.style = ttk.Style()
+    try:
+        self.style.theme_use("clam")
+    except Exception:
+        pass
+
+    base = (self.ui_font, 10)
+    small = (self.ui_font, 9)
+    bold = (self.ui_font, 10, "bold")
+
+    self.style.configure("TFrame", background=c["bg"])
+    self.style.configure("Panel.TFrame", background=c["panel"])
+    self.style.configure("Panel2.TFrame", background=c["panel2"])
+    self.style.configure("TLabel", background=c["bg"], foreground=c["text"], font=base)
+    self.style.configure("Panel.TLabel", background=c["panel"], foreground=c["text"], font=base)
+    self.style.configure("Panel2.TLabel", background=c["panel2"], foreground=c["text"], font=base)
+    self.style.configure("Header.TLabel", background=c["bg"], foreground=c["text"], font=(self.ui_font, 22, "bold"))
+    self.style.configure("Sub.TLabel", background=c["bg"], foreground=c["sub"], font=small)
+    self.style.configure("Status.TLabel", background=c["panel"], foreground=c["accent"], font=(self.ui_font, 11, "bold"))
+    self.style.configure("Warn.TLabel", background=c["panel"], foreground=c["warning"], font=bold)
+    self.style.configure("Success.TLabel", background=c["panel"], foreground=c["success"], font=bold)
+    self.style.configure("Help.TLabel", background=c["panel"], foreground=c["sub"], font=small)
+    self.style.configure("Section.TLabel", background=c["panel"], foreground=c["text"], font=(self.ui_font, 12, "bold"))
+    self.style.configure("Footer.TLabel", background=c["panel2"], foreground=c["sub"], font=small)
+
+    def map_button(name, normal, hover, pressed, fg, pad=(10, 7), font=None):
+        self.style.configure(
+            name, font=font or bold, padding=pad, background=normal, foreground=fg,
+            bordercolor=c["border"], focusthickness=1, focuscolor=c["border"]
+        )
+        self.style.map(
+            name,
+            background=[
+                ("disabled", c["disabled_bg"]), ("pressed", pressed),
+                ("active", hover), ("focus", hover)
+            ],
+            foreground=[
+                ("disabled", c["disabled_fg"]), ("pressed", fg),
+                ("active", fg), ("focus", fg)
+            ],
+            bordercolor=[
+                ("active", c["accent"]), ("focus", c["accent"]), ("pressed", pressed)
+            ],
+        )
+
+    map_button("TButton", c["panel3"], c["card_alt"], c["select_bg"], c["text"], pad=(10, 6), font=base)
+    primary_fg = "#06130A" if self.theme_var.get() == "neo_green" else "#FFFFFF"
+    map_button("Primary.TButton", c["accent"], c["accent_hover"], c["accent_pressed"], primary_fg, pad=(12, 9))
+    map_button("Accent.TButton", c["accent2"], c["accent_hover"], c["accent_pressed"], "#06131F", pad=(10, 7))
+    map_button("Danger.TButton", c["danger"], c["danger_hover"], "#D72B3A", "#FFFFFF", pad=(10, 7))
+
+    self.style.configure("TCheckbutton", background=c["card"], foreground=c["text"], font=base, padding=(2, 2), focusthickness=0)
+    self.style.map("TCheckbutton", background=[("active", c["card"]), ("focus", c["card"]), ("disabled", c["card"])], foreground=[("disabled", c["disabled_fg"]), ("active", c["text"]), ("focus", c["text"])], indicatorcolor=[("selected", c["accent"]), ("!selected", c["input_bg"]), ("disabled", c["disabled_bg"])])
+    self.style.configure("TRadiobutton", background=c["card"], foreground=c["text"], font=base, padding=(2, 2), focusthickness=0)
+    self.style.map("TRadiobutton", background=[("active", c["card"]), ("focus", c["card"]), ("disabled", c["card"])], foreground=[("disabled", c["disabled_fg"]), ("active", c["text"]), ("focus", c["text"])], indicatorcolor=[("selected", c["accent"]), ("!selected", c["input_bg"]), ("disabled", c["disabled_bg"])])
+    self.style.configure("Compact.TCheckbutton", background=c["card"], foreground=c["text"], font=(self.ui_font, 9), padding=(1, 1), focusthickness=0)
+    self.style.map("Compact.TCheckbutton", background=[("active", c["card"]), ("focus", c["card"]), ("disabled", c["card"])], foreground=[("disabled", c["disabled_fg"]), ("active", c["text"]), ("focus", c["text"])], indicatorcolor=[("selected", c["accent"]), ("!selected", c["input_bg"]), ("disabled", c["disabled_bg"])])
+    self.style.configure("Compact.TRadiobutton", background=c["card"], foreground=c["text"], font=(self.ui_font, 9), padding=(1, 1), focusthickness=0)
+    self.style.map("Compact.TRadiobutton", background=[("active", c["card"]), ("focus", c["card"]), ("disabled", c["card"])], foreground=[("disabled", c["disabled_fg"]), ("active", c["text"]), ("focus", c["text"])], indicatorcolor=[("selected", c["accent"]), ("!selected", c["input_bg"]), ("disabled", c["disabled_bg"])])
+
+    self.style.configure("TEntry", fieldbackground=c["input_bg"], foreground=c["text"], insertcolor=c["text"], bordercolor=c["border"], padding=5)
+    self.style.map("TEntry", fieldbackground=[("disabled", c["disabled_bg"]), ("readonly", c["panel3"]), ("focus", c["input_bg"])], foreground=[("disabled", c["disabled_fg"]), ("readonly", c["text"])], bordercolor=[("focus", c["accent"]), ("active", c["accent"])])
+    self.style.configure("TSpinbox", fieldbackground=c["input_bg"], foreground=c["text"], arrowcolor=c["text"], bordercolor=c["border"], padding=4)
+    self.style.map("TSpinbox", fieldbackground=[("disabled", c["disabled_bg"]), ("readonly", c["panel3"]), ("focus", c["input_bg"])], foreground=[("disabled", c["disabled_fg"]), ("readonly", c["text"])], arrowcolor=[("disabled", c["disabled_fg"]), ("active", c["accent"])], bordercolor=[("focus", c["accent"]), ("active", c["accent"])])
+    self.style.configure("TCombobox", fieldbackground=c["input_bg"], background=c["panel3"], foreground=c["text"], arrowcolor=c["text"], bordercolor=c["border"], padding=4)
+    self.style.map("TCombobox", fieldbackground=[("disabled", c["disabled_bg"]), ("readonly", c["input_bg"]), ("focus", c["input_bg"])], background=[("active", c["panel3"]), ("pressed", c["panel3"]), ("readonly", c["input_bg"])], foreground=[("disabled", c["disabled_fg"]), ("readonly", c["text"])], selectbackground=[("readonly", c["select_bg"])], selectforeground=[("readonly", c["text"])], arrowcolor=[("disabled", c["disabled_fg"]), ("active", c["accent"])])
+    self.style.configure("TScale", background=c["card"], troughcolor=c["input_bg"], bordercolor=c["border"], lightcolor=c["accent"], darkcolor=c["accent"])
+    self.style.map("TScale", background=[("active", c["accent"]), ("focus", c["accent"])])
+    self.style.configure("Vertical.TScrollbar", background=c["panel3"], troughcolor=c["panel2"], bordercolor=c["panel2"], arrowcolor=c["sub"], width=10)
+    self.style.map("Vertical.TScrollbar", background=[("active", c["accent"]), ("pressed", c["accent_pressed"])], arrowcolor=[("active", c["text"]), ("pressed", c["text"])])
+    self.style.configure("TLabelframe", background=c["panel"], foreground=c["text"], bordercolor=c["border"], relief="solid")
+    self.style.configure("TLabelframe.Label", background=c["panel"], foreground=c["text"], font=bold)
+    self.style.configure("Treeview", background=c["panel2"], fieldbackground=c["panel2"], foreground=c["text"], rowheight=26, bordercolor=c["border"], font=base)
+    self.style.map("Treeview", background=[("selected", c["select_bg"])], foreground=[("selected", c["text"])])
+    self.style.configure("Treeview.Heading", background=c["panel3"], foreground=c["text"], font=bold, padding=(6, 6))
+    self.style.map("Treeview.Heading", background=[("active", c["accent_pressed"]), ("pressed", c["accent_pressed"])])
+
+    self.option_add("*Listbox.background", c["panel2"])
+    self.option_add("*Listbox.foreground", c["text"])
+    self.option_add("*Listbox.selectBackground", c["select_bg"])
+    self.option_add("*Listbox.selectForeground", c["text"])
+    self.option_add("*Text.background", c["panel2"])
+    self.option_add("*Text.foreground", c["text"])
+    self.option_add("*Text.insertBackground", c["text"])
+    self.option_add("*Text.selectBackground", c["select_bg"])
+    self.option_add("*Text.selectForeground", c["text"])
+
+
+def _v13_load_ui_images(self):
+    self._ui_images = {}
+    base = Path(resource_path("assets/ui"))
+    embedded_icons = {'dashboard': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAjElEQVR4nO2UwQ2AMAwDW8RMjMRQHalLhRcSQm1x4kh8fG8SGydNKUIIktbNmPotQ5wxETbwFo2aqKzwiPOocF9XAuhfetKADXgjRr+HDETni9QtZ8U+sSezvZgmkCm+6jc0kC1O923dLLKESA11CTOQgT1aOJqv5wTf/J6ADMgAtLXMaf56Gb8nIMQF4sVQbnOgzSoAAAAASUVORK5CYII=', 'recordings': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAaklEQVR4nO2W2wkAIAwDqziTIzmUI7mUDuCjSAtRyP2qNKT3oQghYMLuoLbevYeVHKZ50XvILUm7sEp9y6lNeAPwAOoKRGxCaiv8owEPEXfAG4AHoISUEB6AElJCeID3JbR+TrX38BUQMgAd9yDcn6NMgAAAAABJRU5ErkJggg==', 'web': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA1UlEQVR4nO2WQQ6FIAxE7Y9n4kgcyiN5KVyZEKRlptgY852dAZyXoTRdlk//LvEc2vZStLWchPontdky9oJAm3rGp8G51n6jIL8Z855yEqnXR6mZAKy5ts+CUAHqQ2xhMRDDK8hJpL1nLwQMMGNoQfRSgIvwLpghQJShlsIwgWg9DnCJmWm3XtXX+3gCq7ag9fpWTNG6nmG0LgBW05iRlhTUiiOATIC7Ta06gVrxDJB7HmCGCsRceyVmAr1DKAw6T8BFiEJseynMMPOOqZgBiZobPoXpAOwFmC9xmAO1AAAAAElFTkSuQmCC', 'smart': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAi0lEQVR4nO1W2wnAMAhMSmfqSB0qI2Up8xXIR8BnMVLvT8LpIZ6mlER0tA7QOoCUf1mKSQEhBVQpcTd471PZ+dgEysRzhLAErMV3RbB3FTh+1+4Gk4RUjrsLUGjaSeG6d+BeA9PBQfJOl5zVAczbUqh3wr9tOPHVJnS/BbGuISbE/AJSheSvOAUkNBiuIn1X1mL3OQAAAABJRU5ErkJggg==', 'calendar': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAgklEQVR4nO2VwQ3AIAhFtelMbtQOZTdyKXoyaVFMCTZ4+O+oJH4eJIYAwEdyIcqFaHb9ZotlBwFi71Azay1niq833Q3so8tn2mqFdyDB6yWrwwBSmJn1a4/gz2WsrG1AO/cRks21DXDS1XZRDpsldwMI4B5AtYTWhevhbgAB8BkBcAMS5C71fwsruAAAAABJRU5ErkJggg==', 'settings': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA60lEQVR4nOVWwQ3EIAwjp5uJkRiqI3Up7oVUoSTYSVUqnV+VGhuDTEgp/w7JkI+z9/HdqoS0PhkDd+DdBq5HnIGnYxoYpKyJlY5qYC6OmkB0VANaolkTWr2m614dVCTDc0M4k9C7zvAgwePsfRZBdqnxQgY0Q9Y/tiPSBqz2G23LVCf0FrHMrPBFSGioWhVhekirIu9+C54AFcJV0CJBpE7AC1r0FmzvA9AJzAt6t8DjaaAeFmZ3KI+aiNAGw/BMZ+hjg/yzakoBJyKL7AEdaqCJKDrzIzpmBkZxdHFUh5qIsiZoA09gu4Ht+AF22LDSzAMOgQAAAABJRU5ErkJggg==', 'diagnostics': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAArUlEQVR4nO2WQQ7AEBBFaXomR3IoR3IpXdnIGGX+Z+OvJE36XuercO7m5nA8+oUpl6I9j8HDmapEb13zMARi8D7lUipQmwpFQEpPgiIgwXrdwwVGm7DNy4bXL6dXMBp7rwLIPznTeRvzBCxws4AVbhJAwJcFUPAlASR8WgANnxJgwH8LsODOKQeRdqYjLxXiBHbBRYGdcFGACZsS2CUhApi7vo04gRa2q46bI/kAymdmU6olyVwAAAAASUVORK5CYII=', 'export': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAi0lEQVR4nO2Vyw2AIBBEwViTJVmUJdkUnkz2APtDMgfnnTDh8xgWLIX8nToz+Lpbe9vnUVNzbTMCX5AWkLvvfS8VGC2WkQgLWItEJUIC3skjEm6B6M68/XkN4QLD2LL3WqN3TPAEdquDVlzeItTShCdAAbiAWYQa2ddPAk+AAnABswhX/BMk8AQIeQCSdjoIVa8EFAAAAABJRU5ErkJggg==', 'help': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA2klEQVR4nO1WWw7DMAij087UI+1QO1Iv1X2lijpwbEorTSufPGwLiIjZbf9uU6bovaxrFHvNk4QpJSPirBAqaU+MwJVcSkAPqLSXrYOACMQbB8qJRDyqyD1/X6fsz1bgFUX+bE0ZebY2HIEHYDZexBaXW94TpYsHGJ6f7sBZ9jsCKkZzSAC7XOyyygIYESq5mdlTEdDA0TjUc/zVAabVEQlzJfc5cgcYshKr3HqENVxCduuz8VAAc0qbnznP8n+AEdHiHnjJjygiv/RPiMCRlf6KFSGnP8/bqu0DA/LtoxKQSQsAAAAASUVORK5CYII='}
+    for name in ("dashboard", "recordings", "web", "smart", "calendar", "settings", "diagnostics", "export", "help"):
+        try:
+            p = base / f"{name}.png"
+            if p.exists():
+                self._ui_images[name] = tk.PhotoImage(file=str(p))
+            elif name in embedded_icons:
+                self._ui_images[name] = tk.PhotoImage(data=embedded_icons[name])
+        except Exception as exc:
+            log_error(f"load_ui_image_{name}", exc)
+    for name in ("dashboard", "recordings", "web", "smart", "calendar", "settings", "diagnostics", "export", "help"):
+        try:
+            img = self._ui_images.get(name)
+            if img is not None:
+                self._ui_images[f"{name}_nav"] = img.subsample(2, 2)
+        except Exception as exc:
+            log_error(f"derive_nav_icon_{name}", exc)
+    for name in ("logo_72", "logo_52", "logo_32"):
+        try:
+            p = base / f"{name}.png"
+            if p.exists():
+                self._ui_images[name] = tk.PhotoImage(file=str(p))
+        except Exception as exc:
+            log_error(f"load_ui_image_{name}", exc)
+    try:
+        if getattr(self, "_app_icon", None):
+            if "logo_72" not in self._ui_images:
+                self._ui_images["logo_72"] = self._app_icon.subsample(4, 4)
+            if "logo_52" not in self._ui_images:
+                self._ui_images["logo_52"] = self._app_icon.subsample(5, 5)
+            if "logo_32" not in self._ui_images:
+                self._ui_images["logo_32"] = self._app_icon.subsample(8, 8)
+    except Exception as exc:
+        log_error("derive_ui_logos", exc)
+
+
+def _v13_hover_button(self, button, normal_bg, hover_bg, normal_fg=None):
+    fg = normal_fg or self.colors()["text"]
+    button.configure(bg=normal_bg, fg=fg, activebackground=hover_bg, activeforeground=fg)
+    button.bind("<Enter>", lambda _e: button.configure(bg=hover_bg), add="+")
+    button.bind("<Leave>", lambda _e: button.configure(bg=normal_bg), add="+")
+
+
+def _v13_card(self, parent, row, column, columnspan=1, rowspan=1, padx=6, pady=6, sticky="nsew", bg=None):
+    c = self.colors()
+    outer = tk.Frame(parent, bg=c["border"], bd=0, highlightthickness=0)
+    outer.grid(row=row, column=column, columnspan=columnspan, rowspan=rowspan, sticky=sticky, padx=padx, pady=pady)
+    inner = tk.Frame(outer, bg=bg or c["card"], bd=0, highlightthickness=0)
+    inner.pack(fill="both", expand=True, padx=1, pady=1)
+    return inner
+
+
+def _v13_card_title(self, parent, title, icon="", color=None, help_command=None):
+    c = self.colors()
+    header = tk.Frame(parent, bg=parent.cget("bg"))
+    header.pack(fill="x", padx=14, pady=(10, 7))
+    text = f"{icon}  {title}" if icon else title
+    tk.Label(header, text=text, bg=parent.cget("bg"), fg=color or c["text"], font=(self.ui_font, 12, "bold"), anchor="w").pack(side="left")
+    if help_command:
+        b = tk.Button(header, text="?", command=help_command, relief="flat", bd=0, padx=7, pady=2, bg=c["panel3"], fg=c["sub"], activebackground=c["accent"], activeforeground=c["text"], font=(self.ui_font, 9, "bold"), cursor="hand2")
+        b.pack(side="right")
+    tk.Frame(parent, bg=c["border_soft"], height=1).pack(fill="x")
+
+
+def _v13_build_layout(self):
+    c = self.colors()
+    self._load_ui_images()
+    self.grid_rowconfigure(1, weight=1)
+    self.grid_columnconfigure(0, weight=1)
+    top = tk.Frame(self, bg=c["bg"], height=82)
+    top.grid(row=0, column=0, sticky="ew")
+    top.grid_propagate(False)
+    top.grid_columnconfigure(1, weight=1)
+    brand = tk.Frame(top, bg=c["bg"])
+    brand.grid(row=0, column=0, sticky="w", padx=(18, 8), pady=8)
+    if self._ui_images.get("logo_72"):
+        tk.Label(brand, image=self._ui_images["logo_72"], bg=c["bg"], bd=0).pack(side="left", padx=(0, 12))
+    brand_text = tk.Frame(brand, bg=c["bg"])
+    brand_text.pack(side="left")
+    line = tk.Frame(brand_text, bg=c["bg"])
+    line.pack(anchor="w")
+    tk.Label(line, text="Rice2k", bg=c["bg"], fg=c["accent"], font=(self.ui_font, 22, "bold")).pack(side="left")
+    tk.Label(line, text=" Macro Studio", bg=c["bg"], fg=c["text"], font=(self.ui_font, 22, "bold")).pack(side="left")
+    tk.Label(line, text="  v1.4.1", bg=c["bg"], fg=c["sub"], font=(self.ui_font, 9)).pack(side="left", pady=(8, 0))
+    tk.Label(brand_text, text="Record  •  Automate  •  Simplify", bg=c["bg"], fg=c["sub"], font=(self.ui_font, 10)).pack(anchor="w", pady=(3, 0))
+    tk.Label(top, text="Automate Today   ▶   Do More Tomorrow", bg=c["bg"], fg=c["accent"], font=(self.ui_font, 12, "italic")).grid(row=0, column=1, sticky="e", padx=22)
+    tools = tk.Frame(top, bg=c["bg"])
+    tools.grid(row=0, column=2, sticky="e", padx=(6, 18))
+    for label, cmd in (("?  Help", self.show_help), ("☼  Theme", self.show_settings), ("⚙  Settings", self.show_settings)):
+        b = tk.Button(tools, text=label, command=cmd, relief="flat", bd=0, padx=10, pady=8, bg=c["bg"], fg=c["sub"], activebackground=c["panel3"], activeforeground=c["text"], font=(self.ui_font, 10), cursor="hand2")
+        b.pack(side="left", padx=2)
+    body = tk.Frame(self, bg=c["bg"])
+    body.grid(row=1, column=0, sticky="nsew")
+    body.grid_rowconfigure(0, weight=1)
+    body.grid_columnconfigure(1, weight=1)
+    sidebar = tk.Frame(body, bg=c["panel2"], width=164)
+    sidebar.grid(row=0, column=0, sticky="nsw")
+    sidebar.grid_propagate(False)
+    self.sidebar_buttons = {}
+    nav_items = [("dashboard", "Dashboard", self.show_dashboard), ("recordings", "Recordings", self.show_recordings), ("web", "Web Capture", self.show_automation), ("smart", "Smart Targets", self.show_smart_actions), ("calendar", "Calendar", self.show_calendar_guide), ("settings", "Settings", self.show_settings), ("diagnostics", "Diagnostics", self.show_diagnostics), ("export", "Export", self.show_exports), ("help", "Help", self.show_help)]
+    nav = tk.Frame(sidebar, bg=c["panel2"])
+    nav.pack(fill="x", padx=8, pady=(6, 0))
+    for icon_name, label, cmd in nav_items:
+        img = self._ui_images.get(f"{icon_name}_nav") or self._ui_images.get(icon_name)
+        btn = tk.Button(nav, text=label, image=img, compound="left", anchor="w", command=cmd, relief="flat", bd=0, padx=12, pady=8, bg=c["panel2"], fg=c["sub"], activebackground=c["panel3"], activeforeground=c["text"], font=(self.ui_font, 10), cursor="hand2")
+        btn.pack(fill="x", pady=1)
+        self.sidebar_buttons[label] = btn
+    side_spacer = tk.Frame(sidebar, bg=c["panel2"])
+    side_spacer.pack(fill="both", expand=True)
+    tk.Frame(sidebar, bg=c["border_soft"], height=1).pack(fill="x", padx=12, pady=(0, 9))
+    if self._ui_images.get("logo_52"):
+        tk.Label(sidebar, image=self._ui_images["logo_52"], bg=c["panel2"], bd=0).pack()
+    tk.Label(sidebar, text="Rice2k", bg=c["panel2"], fg=c["accent"], font=(self.ui_font, 11, "bold")).pack(pady=(5, 1))
+    tk.Label(sidebar, text='"Small Tools.\nBig Possibilities."', bg=c["panel2"], fg=c["sub"], justify="center", font=(self.ui_font, 8, "italic")).pack(pady=(0, 8))
+    main = tk.Frame(body, bg=c["panel"])
+    main.grid(row=0, column=1, sticky="nsew")
+    main.grid_rowconfigure(0, weight=1)
+    main.grid_columnconfigure(0, weight=1)
+    self.content = tk.Frame(main, bg=c["panel"])
+    self.content.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+    self.content.grid_rowconfigure(0, weight=1)
+    self.content.grid_columnconfigure(0, weight=1)
+    footer = tk.Frame(self, bg=c["panel2"], height=38)
+    footer.grid(row=2, column=0, sticky="ew")
+    footer.grid_propagate(False)
+    footer.grid_columnconfigure(2, weight=1)
+    tk.Label(footer, text="●  Ready", bg=c["panel2"], fg=c["success"], font=(self.ui_font, 10, "bold")).grid(row=0, column=0, padx=(18, 12), pady=9, sticky="w")
+    tk.Frame(footer, bg=c["border_soft"], width=1).grid(row=0, column=1, sticky="ns", pady=8)
+    tk.Label(footer, textvariable=self.loaded_file_var, bg=c["panel2"], fg=c["sub"], font=(self.ui_font, 9)).grid(row=0, column=2, padx=14, pady=9, sticky="w")
+    tk.Label(footer, text=str(APP_DIR), bg=c["panel2"], fg=c["sub"], font=(self.ui_font, 9)).grid(row=0, column=3, padx=14, pady=9, sticky="e")
+    self.clock_var = tk.StringVar(value="")
+    tk.Label(footer, textvariable=self.clock_var, bg=c["panel2"], fg=c["text"], font=(self.ui_font, 10, "bold")).grid(row=0, column=4, padx=(10, 18), pady=9, sticky="e")
+    self._wheel_canvas = None
+    self.bind_all("<MouseWheel>", self._global_mousewheel, add="+")
+    self.bind_all("<Button-4>", self._global_mousewheel, add="+")
+    self.bind_all("<Button-5>", self._global_mousewheel, add="+")
+    self._update_clock()
+    self.show_dashboard()
+
+
+def _v13_global_mousewheel(self, event):
+    canvas = getattr(self, "_wheel_canvas", None)
+    if canvas is None:
+        return None
+    try:
+        if getattr(event, "delta", 0):
+            canvas.yview_scroll(-3 if event.delta > 0 else 3, "units")
+        elif getattr(event, "num", None) == 4:
+            canvas.yview_scroll(-3, "units")
+        elif getattr(event, "num", None) == 5:
+            canvas.yview_scroll(3, "units")
+        return "break"
+    except Exception:
+        return None
+
+
+def _v13_update_clock(self):
+    now = datetime.datetime.now()
+    try:
+        text = now.strftime("%#I:%M:%S %p") if os.name == "nt" else now.strftime("%-I:%M:%S %p")
+    except Exception:
+        text = now.strftime("%I:%M:%S %p").lstrip("0")
+    try:
+        self.clock_var.set(text)
+        self.clock_job = self.after(1000, self._update_clock)
+    except Exception:
+        pass
+
+
+def _v13_set_sidebar_active(self, label):
+    c = self.colors()
+    aliases = {"Smart Actions": "Smart Targets", "Exports": "Export", "Automation": "Web Capture", "Calendar Guide": "Calendar", "Help & Guide": "Help"}
+    target = aliases.get(label, label)
+    for name, btn in getattr(self, "sidebar_buttons", {}).items():
+        try:
+            if name == target:
+                active_fg = "#06130A" if self.theme_var.get() == "neo_green" else "#FFFFFF"
+                btn.configure(bg=c["accent_pressed"], fg=active_fg, activebackground=c["accent"], activeforeground=active_fg)
+            else:
+                btn.configure(bg=c["panel2"], fg=c["sub"], activebackground=c["panel3"], activeforeground=c["text"])
+        except Exception:
+            pass
+
+
+def _v13_panel(self):
+    c = self.colors()
+    p = tk.Frame(self.content, bg=c["panel"])
+    p.grid(row=0, column=0, sticky="nsew")
+    p.grid_columnconfigure(0, weight=1)
+    p.grid_rowconfigure(0, weight=1)
+    return p
+
+
+def _v13_scroll_frame(self, parent):
+    c = self.colors()
+    canvas = tk.Canvas(parent, bg=c["panel"], highlightthickness=0, borderwidth=0)
+    bar = ttk.Scrollbar(parent, orient="vertical", style="Vertical.TScrollbar", command=canvas.yview)
+    frame = tk.Frame(canvas, bg=c["panel"])
+    wid = canvas.create_window((0, 0), window=frame, anchor="nw")
+    def refresh(_event=None):
+        try:
+            bbox = canvas.bbox("all")
+            if bbox:
+                canvas.configure(scrollregion=bbox)
+                content_h = bbox[3] - bbox[1]
+                view_h = max(1, canvas.winfo_height())
+                if content_h > view_h + 4:
+                    bar.grid()
+                else:
+                    bar.grid_remove()
+        except Exception:
+            pass
+    def resize(event):
+        try:
+            canvas.itemconfigure(wid, width=max(1, event.width))
+            refresh()
+        except Exception:
+            pass
+    frame.bind("<Configure>", refresh)
+    canvas.bind("<Configure>", resize)
+    canvas.bind("<Enter>", lambda _e: setattr(self, "_wheel_canvas", canvas))
+    frame.bind("<Enter>", lambda _e: setattr(self, "_wheel_canvas", canvas))
+    canvas.bind("<Leave>", lambda _e: setattr(self, "_wheel_canvas", None))
+    frame.bind("<Leave>", lambda _e: setattr(self, "_wheel_canvas", None))
+    canvas.configure(yscrollcommand=bar.set)
+    canvas.grid(row=0, column=0, sticky="nsew")
+    bar.grid(row=0, column=1, sticky="ns")
+    parent.grid_columnconfigure(0, weight=1)
+    parent.grid_rowconfigure(0, weight=1)
+    self._active_scroll_canvas = canvas
+    self.after_idle(refresh)
+    return frame
+
+
+def _v13_show_dashboard(self):
+    c = self.colors()
+    self.current_screen.set("Dashboard")
+    self.clear_content()
+    f = self.scroll_frame(self.panel())
+    for col in range(6):
+        f.grid_columnconfigure(col, weight=1, uniform="dash")
+
+    hero = self._card(f, 0, 0, columnspan=6, padx=0, pady=(0, 7))
+    hero.grid_columnconfigure(0, weight=1)
+    title = tk.Frame(hero, bg=c["card"])
+    title.grid(row=0, column=0, sticky="ew", padx=12, pady=(8, 3))
+    tk.Label(title, text="🎯  Recording Dashboard", bg=c["card"], fg=c["text"], font=(self.ui_font, 15, "bold")).pack(side="left")
+    chips = tk.Frame(title, bg=c["card"])
+    chips.pack(side="right")
+    tk.Label(chips, text="●  Ready", bg=c["card_alt"], fg=c["success"], font=(self.ui_font, 10, "bold"), padx=12, pady=6).pack(side="left", padx=4)
+    tk.Label(chips, textvariable=self.loaded_file_var, bg=c["panel2"], fg=c["sub"], font=(self.ui_font, 9), padx=12, pady=6).pack(side="left", padx=4)
+    tk.Label(hero, text="Start here. Click-Only Fast is recommended for most work. Record clicks, scroll, and optional keyboard without storing every tiny mouse movement.", bg=c["card"], fg=c["sub"], font=(self.ui_font, 10), anchor="w", justify="left").grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 8))
+
+    controls = self._card(f, 1, 0, columnspan=6, padx=0, pady=5)
+    controls.grid_columnconfigure((0, 1, 2, 3, 4), weight=1, uniform="controls")
+    control_specs = [("▶", "Start Recording", self.hotkey_vars["start"].get().upper(), c["accent"], c["accent_hover"], self.start_recording), ("■", "Stop + Save", self.hotkey_vars["stop"].get().upper(), c["panel3"], c["select_bg"], self.stop_recording), ("Ⅱ", "Pause / Resume", self.hotkey_vars["pause"].get().upper(), c["panel3"], c["select_bg"], self.pause_resume), ("▶", "Play", self.hotkey_vars["play"].get().upper(), c["panel3"], c["select_bg"], self.confirm_playback), ("■", "Emergency Stop", self.hotkey_vars["emergency"].get().upper(), c["danger"], c["danger_hover"], self.emergency_stop)]
+    for i, (symbol, label, key, bg, hover, cmd) in enumerate(control_specs):
+        control_fg = "#06130A" if self.theme_var.get() == "neo_green" and bg in (c["accent"], c["accent2"]) else "#FFFFFF"
+        b = tk.Button(controls, text=f"{symbol}   {label}\n{key}", command=cmd, bg=bg, fg=control_fg, activebackground=hover, activeforeground=control_fg, relief="flat", bd=0, font=(self.ui_font, 10, "bold"), cursor="hand2", padx=7, pady=7)
+        b.grid(row=0, column=i, sticky="nsew", padx=5, pady=8)
+        self._hover_button(b, bg, hover, control_fg)
+
+    stat_specs = [("☷", "Actions Recorded", self.action_count_var, c["text"]), ("◷", "Elapsed Time", self.elapsed_var, c["accent"]), ("▶", "Playback Status", self.playback_var, c["success"])]
+    for idx, (icon, label, var, value_color) in enumerate(stat_specs):
+        card = self._card(f, 2, idx * 2, columnspan=2, padx=(0 if idx == 0 else 5, 0 if idx == 2 else 5), pady=5)
+        inner = tk.Frame(card, bg=c["card"])
+        inner.pack(fill="both", expand=True, padx=12, pady=7)
+        tk.Label(inner, text=icon, bg=c["card"], fg=c["text"], font=(self.ui_font, 18)).pack(side="left", padx=(2, 14))
+        text = tk.Frame(inner, bg=c["card"])
+        text.pack(side="left", fill="both", expand=True)
+        tk.Label(text, text=label, bg=c["card"], fg=c["sub"], font=(self.ui_font, 10), anchor="w").pack(anchor="w")
+        tk.Label(text, textvariable=var, bg=c["card"], fg=value_color, font=(self.ui_font, 14, "bold"), anchor="w").pack(anchor="w", pady=(2, 0))
+
+    record = self._card(f, 3, 0, columnspan=4, padx=(0, 5), pady=5)
+    self._card_title(record, "What to Record", "➤", c["text"], self.show_help)
+    opts = tk.Frame(record, bg=c["card"])
+    opts.pack(fill="both", expand=True, padx=12, pady=7)
+    opts.grid_columnconfigure((0, 1), weight=1)
+    option_specs = [("Mouse clicks", self.record_mouse_var), ("Keyboard (optional)", self.record_keyboard_var), ("Mouse movement path", self.record_mouse_moves_var), ("Skip movement on playback", self.skip_moves_var), ("Scroll wheel", self.record_scroll_var), ("Mouse-only safe mode", self.mouse_safe_var)]
+    for i, (label, var) in enumerate(option_specs):
+        ttk.Checkbutton(opts, text=label, variable=var, command=self.save_vars, style="Compact.TCheckbutton").grid(row=i // 2, column=i % 2, sticky="w", padx=(0, 18), pady=3)
+    mode_map = {"click_fast": "Click-Only Fast (Recommended)", "physical": "Physical Replay", "browser": "Browser Element Capture", "window_aware": "Window-Aware"}
+    reverse_mode = {v: k for k, v in mode_map.items()}
+    self._dashboard_mode_display = tk.StringVar(value=mode_map.get(self.mode_var.get(), self.mode_var.get()))
+    mode = ttk.Combobox(opts, textvariable=self._dashboard_mode_display, values=list(mode_map.values()), state="readonly")
+    mode.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(6, 1))
+    def set_mode(_event=None):
+        raw = reverse_mode.get(self._dashboard_mode_display.get(), "click_fast")
+        self.mode_var.set(raw)
+        self.apply_mode(raw)
+    mode.bind("<<ComboboxSelected>>", set_mode)
+
+    playback = self._card(f, 3, 4, columnspan=2, padx=(5, 0), pady=5)
+    self._card_title(playback, "Playback Settings", "⚙", c["text"])
+    pbody = tk.Frame(playback, bg=c["card"])
+    pbody.pack(fill="both", expand=True, padx=12, pady=8)
+    pbody.grid_columnconfigure(1, weight=1)
+    tk.Label(pbody, text="Speed", bg=c["card"], fg=c["text"], font=(self.ui_font, 10)).grid(row=0, column=0, sticky="w", pady=4)
+    speed = ttk.Scale(pbody, from_=0.5, to=100, variable=self.speed_var, command=self.on_speed_change)
+    speed.grid(row=0, column=1, sticky="ew", padx=12)
+    speed.bind("<ButtonRelease-1>", lambda _e: self.save_vars(), add="+")
+    self.speed_label = tk.Label(pbody, text=f"{self.speed_var.get():.1f}x", bg=c["card"], fg=c["accent"], font=(self.ui_font, 13, "bold"))
+    self.speed_label.grid(row=0, column=2, padx=(5, 0))
+    tk.Label(pbody, text="Repeat count", bg=c["card"], fg=c["text"], font=(self.ui_font, 10)).grid(row=1, column=0, sticky="w", pady=4)
+    ttk.Spinbox(pbody, from_=1, to=999, textvariable=self.repeat_var, width=9, command=self.save_vars).grid(row=1, column=1, sticky="w", padx=12)
+    tk.Label(pbody, text="Delay between runs (s)", bg=c["card"], fg=c["text"], font=(self.ui_font, 10)).grid(row=2, column=0, sticky="w", pady=4)
+    ttk.Spinbox(pbody, from_=0, to=99999, textvariable=self.delay_var, width=9, command=self.save_vars).grid(row=2, column=1, sticky="w", padx=12)
+
+    quick = self._card(f, 4, 0, columnspan=2, padx=(0, 5), pady=5)
+    self._card_title(quick, "Quick Actions", "⚡", c["text"])
+    qb = tk.Frame(quick, bg=c["card"])
+    qb.pack(fill="both", expand=True, padx=10, pady=8)
+    export_btn = tk.Button(qb, text="⇧\nExport Current\nRecording", command=self.show_exports, bg="#087F54", fg="#FFFFFF", activebackground="#0A9A66", activeforeground="#FFFFFF", relief="flat", bd=0, font=(self.ui_font, 9, "bold"), padx=10, pady=8, cursor="hand2")
+    export_btn.pack(side="left", fill="both", expand=True, padx=4)
+    self._hover_button(export_btn, "#087F54", "#0A9A66", "#FFFFFF")
+    for text, cmd in (("▣\nLoad Recording", self.choose_recording), ("?\nHow It Works", self.show_help)):
+        b = tk.Button(qb, text=text, command=cmd, bg=c["panel3"], fg=c["text"], activebackground=c["select_bg"], activeforeground=c["text"], relief="flat", bd=0, font=(self.ui_font, 9), padx=9, pady=8, cursor="hand2")
+        b.pack(side="left", fill="both", expand=True, padx=4)
+        self._hover_button(b, c["panel3"], c["select_bg"], c["text"])
+
+    tips = self._card(f, 4, 2, columnspan=2, padx=4, pady=5)
+    self._card_title(tips, "Tips", "💡", c["text"])
+    tip_text = "• Click-Only Fast works best for most tasks\n• Use Smart Targets for reliable replay\n• Use Web Capture for browser automation\n• Enable scroll when your task requires it\n• Help & Guide includes more examples"
+    tk.Label(tips, text=tip_text, bg=c["card"], fg=c["sub"], justify="left", font=(self.ui_font, 9), anchor="nw").pack(fill="both", expand=True, padx=12, pady=8)
+
+    hot = self._card(f, 4, 4, columnspan=2, padx=(4, 0), pady=5)
+    self._card_title(hot, "Hotkeys", "⌨", c["text"])
+    rows = tk.Frame(hot, bg=c["card"])
+    rows.pack(fill="both", expand=True, padx=12, pady=7)
+    hotkeys = [("Start Recording", self.hotkey_vars["start"].get().upper()), ("Stop + Save", self.hotkey_vars["stop"].get().upper()), ("Pause / Resume", self.hotkey_vars["pause"].get().upper()), ("Play", self.hotkey_vars["play"].get().upper()), ("Emergency Stop", self.hotkey_vars["emergency"].get().upper())]
+    for r, (label, key) in enumerate(hotkeys):
+        tk.Label(rows, text="■", bg=c["card"], fg=c["accent"], font=(self.ui_font, 8)).grid(row=r, column=0, sticky="w", pady=3)
+        tk.Label(rows, text=label, bg=c["card"], fg=c["text"], font=(self.ui_font, 9)).grid(row=r, column=1, sticky="w", padx=8, pady=3)
+        tk.Label(rows, text=key, bg=c["card"], fg=c["text"], font=(self.ui_font, 9, "bold")).grid(row=r, column=2, sticky="e", padx=(16, 0), pady=3)
+    rows.grid_columnconfigure(1, weight=1)
+
+
+MouseRecorderApp.show_recordings = _v141_show_recordings
+MouseRecorderApp.show_automation = _v141_show_automation
+MouseRecorderApp.show_calendar_guide = _v141_show_calendar_guide
+MouseRecorderApp.show_settings = _v141_show_settings
+MouseRecorderApp._build_style = _v13_build_style
+MouseRecorderApp._load_ui_images = _v13_load_ui_images
+MouseRecorderApp._hover_button = _v13_hover_button
+MouseRecorderApp._card = _v13_card
+MouseRecorderApp._card_title = _v13_card_title
+MouseRecorderApp._build_layout = _v13_build_layout
+MouseRecorderApp._global_mousewheel = _v13_global_mousewheel
+MouseRecorderApp._update_clock = _v13_update_clock
+MouseRecorderApp._set_sidebar_active = _v13_set_sidebar_active
+MouseRecorderApp.panel = _v13_panel
+MouseRecorderApp.scroll_frame = _v13_scroll_frame
+MouseRecorderApp.show_dashboard = _v13_show_dashboard
