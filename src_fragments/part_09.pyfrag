@@ -1,0 +1,229 @@
+             "Import JSON downloaded from the Browser Element Capture helper and show those targets alongside Windows actions."),
+            ("Save Edited Copy", self.save_semantic_copy,
+             "Save current in-memory raw actions, including TODAY rules and smart-target metadata, as a new recording."),
+            ("Calendar Guide", self.show_calendar_guide,
+             "Open the built-in calendar guide and TODAY self-test."),
+            ("Raw Action Editor", self.open_raw_editor,
+             "Open the low-level action editor."),
+        ]
+        for label, cmd, hint in actions:
+            b = ttk.Button(bar, text=label, command=cmd)
+            b.pack(side="left", padx=4)
+            self.tip(b, hint)
+
+        bar2 = ttk.Frame(p, style="Panel.TFrame")
+        bar2.grid(row=4, column=0, sticky="ew", padx=18, pady=(0,10))
+        for label, cmd in [
+            ("Export Smart TXT", self.export_smart_actions),
+            ("Export Smart CSV", lambda: self.export_current("smart_csv")),
+            ("Export Smart JSON", lambda: self.export_current("smart_json")),
+        ]:
+            ttk.Button(bar2, text=label, command=cmd).pack(side="left", padx=4)
+
+    def _selected_smart_action(self):
+        if not hasattr(self, "smart_tree"):
+            return None
+        sel = self.smart_tree.selection()
+        if not sel:
+            messagebox.showwarning("No Selection", "Select a Smart Action first.")
+            return None
+        return self.smart_row_map.get(sel[0])
+
+    def mark_selected_today(self):
+        action = self._selected_smart_action()
+        if not action:
+            return
+        if action.get("source") != "windows" or action.get("type") != "mouse_click":
+            messagebox.showwarning("TODAY Rule", "The TODAY rule is currently for recognized Windows calendar clicks. Browser capture has its own Mark Next = TODAY button.")
+            return
+        raw_index = action.get("raw_index")
+        if raw_index is None:
+            messagebox.showerror("TODAY Rule", "Could not locate the raw click behind this Smart Action.")
+            return
+        with self.engine.action_lock:
+            if 0 <= raw_index < len(self.engine.actions):
+                self.engine.actions[raw_index]["dynamic_rule"] = "today"
+                if raw_index + 1 < len(self.engine.actions):
+                    nxt = self.engine.actions[raw_index + 1]
+                    if nxt.get("type") == "click" and not nxt.get("pressed"):
+                        nxt["dynamic_rule"] = "today"
+        self.add_log("Marked selected Windows calendar click with dynamic_rule=today")
+        self.show_smart_actions()
+
+    def clear_selected_dynamic_rule(self):
+        action = self._selected_smart_action()
+        if not action or action.get("source") != "windows":
+            return
+        raw_index = action.get("raw_index")
+        if raw_index is None:
+            return
+        with self.engine.action_lock:
+            if 0 <= raw_index < len(self.engine.actions):
+                self.engine.actions[raw_index]["dynamic_rule"] = ""
+                if raw_index + 1 < len(self.engine.actions):
+                    nxt = self.engine.actions[raw_index + 1]
+                    if nxt.get("type") == "click" and not nxt.get("pressed"):
+                        nxt["dynamic_rule"] = ""
+        self.show_smart_actions()
+
+    def import_browser_capture(self):
+        path = filedialog.askopenfilename(
+            title="Import Browser Capture JSON",
+            initialdir=WEBSITE_ACTIONS_DIR,
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        if not path:
+            return
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                data = data.get("actions", data.get("browser_actions", []))
+            if not isinstance(data, list):
+                raise ValueError("Browser capture JSON must contain a list of actions.")
+            self.browser_capture_actions = [x for x in data if isinstance(x, dict)]
+            self.add_log(f"Imported {len(self.browser_capture_actions)} browser capture actions from {path}")
+            self.show_smart_actions()
+        except Exception as exc:
+            log_error("import_browser_capture", exc)
+            messagebox.showerror("Import Error", str(exc))
+
+    def save_semantic_copy(self):
+        actions = self.engine.snapshot_actions()
+        if not actions:
+            messagebox.showwarning("No Actions", "Load or record something first.")
+            return
+        smart = build_smart_actions(actions)
+        path = RECORDINGS_DIR / f"smart_target_recording_{now_stamp()}.json"
+        payload = {
+            "app": APP_NAME, "version": APP_VERSION,
+            "created": datetime.datetime.now().isoformat(),
+            "action_count": len(actions), "smart_action_count": len(smart),
+            "actions": actions, "smart_actions": smart,
+            "browser_capture_actions": list(self.browser_capture_actions),
+        }
+        path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        self.engine.current_file = str(path)
+        self.loaded_file_var.set(str(path))
+        self.settings["last_recording"] = str(path)
+        save_settings(self.settings)
+        messagebox.showinfo("Saved", f"Smart-target copy saved:\n{path}")
+
+
+    def open_raw_editor(self):
+        """Low-level editor for removing actions and adjusting per-action delays."""
+        actions = self.engine.snapshot_actions()
+        if not actions:
+            messagebox.showwarning("No Actions", "Load or record something first.")
+            return
+
+        win = tk.Toplevel(self)
+        win.title("Rice2k Macro Studio - Raw Action Editor")
+        win.geometry("1100x650")
+        win.minsize(850, 500)
+        win.configure(bg=self.colors()["bg"])
+        win.columnconfigure(0, weight=1)
+        win.rowconfigure(2, weight=1)
+
+        ttk.Label(
+            win,
+            text="Raw Action Editor",
+            style="Header.TLabel"
+        ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 2))
+        ttk.Label(
+            win,
+            text="Low-level actions are shown exactly as playback uses them. Delete only actions you understand. Delay is time since the previous action.",
+            style="Sub.TLabel",
+            wraplength=1000,
+            justify="left"
+        ).grid(row=1, column=0, sticky="w", padx=14, pady=(0, 8))
+
+        columns = ("index", "time", "delay", "type", "details", "window")
+        tree = ttk.Treeview(win, columns=columns, show="headings", selectmode="extended")
+        widths = {
+            "index": 65, "time": 85, "delay": 85, "type": 90,
+            "details": 360, "window": 360
+        }
+        for c in columns:
+            tree.heading(c, text=c.title())
+            tree.column(c, width=widths[c], stretch=c in {"details", "window"})
+        tree.grid(row=2, column=0, sticky="nsew", padx=(14, 0), pady=8)
+        scroll = ttk.Scrollbar(win, orient="vertical", command=tree.yview)
+        scroll.grid(row=2, column=1, sticky="ns", pady=8, padx=(0, 14))
+        tree.configure(yscrollcommand=scroll.set)
+
+        def detail_for(a):
+            t = a.get("type", "")
+            if t == "click":
+                semantic = a.get("control_name") or a.get("automation_id") or ""
+                return f"{a.get('button','left')} {'down' if a.get('pressed') else 'up'} @ {a.get('x')},{a.get('y')} {semantic}".strip()
+            if t == "scroll":
+                return f"dx={a.get('dx',0)} dy={a.get('dy',0)} @ {a.get('x')},{a.get('y')}"
+            if t == "key":
+                key = a.get("key", "")
+                shown = "*" if a.get("key_kind") == "char" and len(str(key)) == 1 else key
+                return f"{shown} {'down' if a.get('pressed') else 'up'}"
+            if t == "move":
+                return f"{a.get('x')},{a.get('y')}"
+            return ""
+
+        def refresh():
+            tree.delete(*tree.get_children())
+            for i, a in enumerate(self.engine.snapshot_actions()):
+                tree.insert(
+                    "", "end", iid=f"raw_{i}",
+                    values=(
+                        i,
+                        f"{float(a.get('time_from_start',0)):.3f}",
+                        f"{float(a.get('time_since_last',0)):.3f}",
+                        a.get("type", ""),
+                        detail_for(a),
+                        a.get("window_title", ""),
+                    )
+                )
+
+        def selected_indexes():
+            values = []
+            for iid in tree.selection():
+                try:
+                    values.append(int(iid.split("_", 1)[1]))
+                except Exception:
+                    pass
+            return sorted(set(values))
+
+        def delete_selected():
+            indexes = selected_indexes()
+            if not indexes:
+                messagebox.showwarning("No Selection", "Select one or more raw actions first.", parent=win)
+                return
+            if not messagebox.askyesno(
+                "Delete Raw Actions",
+                f"Delete {len(indexes)} selected raw action(s)?",
+                parent=win
+            ):
+                return
+            with self.engine.action_lock:
+                for i in reversed(indexes):
+                    if 0 <= i < len(self.engine.actions):
+                        del self.engine.actions[i]
+            self.action_count_var.set(self.counts_text())
+            refresh()
+
+        def edit_delay():
+            indexes = selected_indexes()
+            if len(indexes) != 1:
+                messagebox.showwarning("Select One", "Select exactly one raw action to edit its delay.", parent=win)
+                return
+            i = indexes[0]
+            current = 0.0
+            with self.engine.action_lock:
+                if 0 <= i < len(self.engine.actions):
+                    current = float(self.engine.actions[i].get("time_since_last", 0))
+            dialog = tk.Toplevel(win)
+            dialog.title("Edit Action Delay")
+            dialog.resizable(False, False)
+            ttk.Label(dialog, text="Delay since previous action (seconds):").grid(row=0, column=0, padx=12, pady=(12, 6))
+            value = tk.StringVar(value=f"{current:.4f}")
+            entry = ttk.Entry(dialog, textvariable=value, width=18)
+            entry.grid(row=1, column=0, padx=12, pady=6)
+            entry.focus_set()
+
