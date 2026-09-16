@@ -1,31 +1,50 @@
 {
   "project": "Rice2k-Macro-Studio",
-  "version": "1.1 Website Recording Filters",
-  "validated_at": "2026-09-16T18:22:40.645611",
+  "version": "1.2 Compact UI Redesign",
+  "validated_at": "2026-09-16T20:25:43.529371",
+  "summary": "31 checks passed, 0 failures",
   "checks": [
-    {"name": "Patched application source compiles", "status": "PASS", "detail": ""},
-    {"name": "Patched application imports", "status": "PASS", "detail": "1.1 Website Recording Filters"},
-    {"name": "Website filter defaults", "status": "PASS", "detail": ""},
-    {"name": "Browser event details preserved", "status": "PASS", "detail": ""},
-    {"name": "Clicks filter", "status": "PASS", "detail": ""},
-    {"name": "Scroll filter", "status": "PASS", "detail": ""},
-    {"name": "Click location filter", "status": "PASS", "detail": ""},
-    {"name": "Input filter", "status": "PASS", "detail": ""},
-    {"name": "Selection filter", "status": "PASS", "detail": ""},
-    {"name": "Scroll Only preset", "status": "PASS", "detail": ""},
-    {"name": "Input Only preset", "status": "PASS", "detail": ""},
-    {"name": "Selection Only preset", "status": "PASS", "detail": ""},
-    {"name": "Sensitive field blocker", "status": "PASS", "detail": ""},
-    {"name": "Scroll capture", "status": "PASS", "detail": ""},
-    {"name": "Input capture", "status": "PASS", "detail": ""},
-    {"name": "Selection capture", "status": "PASS", "detail": ""},
-    {"name": "Scroll replay", "status": "PASS", "detail": ""},
-    {"name": "Input replay", "status": "PASS", "detail": ""},
-    {"name": "Browser helper JavaScript syntax", "status": "PASS", "detail": ""}
+    {"name":"Python compile","status":"PASS","detail":""},
+    {"name":"Module import","status":"PASS","detail":"1.2 Compact UI Redesign"},
+    {"name":"No duplicate class methods","status":"PASS","detail":"{}"},
+    {"name":"No missing direct UI callbacks","status":"PASS","detail":"[]"},
+    {"name":"GUI smoke: all 9 main pages","status":"PASS","detail":"Dashboard, Recordings, Smart Targets, Exports, Automation, Calendar, Diagnostics, Settings, Help"},
+    {"name":"Dark button active state","status":"PASS","detail":"#10243A"},
+    {"name":"Dark button disabled state","status":"PASS","detail":"#152438"},
+    {"name":"Primary button active state","status":"PASS","detail":"#2C9BFF"},
+    {"name":"Sidebar active state","status":"PASS","detail":"#10243A"},
+    {"name":"Readonly combobox state","status":"PASS","detail":"#091523"},
+    {"name":"Mouse-wheel page scrolling","status":"PASS","detail":"scroll position changed during synthetic wheel test"},
+    {"name":"Runtime PNG icon valid","status":"PASS","detail":"256x256"},
+    {"name":"Windows ICO icon valid","status":"PASS","detail":"ICO"},
+    {"name":"EXE build icon/reference checks","status":"PASS","detail":"runtime/build icon assets present"},
+    {"name":"Error log writes","status":"PASS","detail":""},
+    {"name":"Startup log writes","status":"PASS","detail":""},
+    {"name":"Browser helper outer JavaScript syntax","status":"PASS","detail":""},
+    {"name":"Browser bookmarklet JavaScript syntax","status":"PASS","detail":""},
+    {"name":"Website filters retained","status":"PASS","detail":""},
+    {"name":"Calendar TODAY retained","status":"PASS","detail":""},
+    {"name":"Smart Targets retained","status":"PASS","detail":""},
+    {"name":"Raw Action Editor retained","status":"PASS","detail":""},
+    {"name":"Export system retained","status":"PASS","detail":""},
+    {"name":"Compact sidebar present","status":"PASS","detail":""},
+    {"name":"No-white disabled style present","status":"PASS","detail":""},
+    {"name":"Segoe UI Variable / Segoe UI fallback present","status":"PASS","detail":""},
+    {"name":"Launcher present","status":"PASS","detail":""},
+    {"name":"Setup diagnostics present","status":"PASS","detail":""},
+    {"name":"Build script present","status":"PASS","detail":""},
+    {"name":"Browser helper present","status":"PASS","detail":""},
+    {"name":"Requirements file present","status":"PASS","detail":""}
   ],
   "github_source_layout": {
     "base_fragment_count": 14,
-    "patches": ["src_patches/v1_1_website_filters.pyfrag"],
-    "patch_sha256": "6ee6685de691865521f11aa68cb1740f5f0663b3f76c044d2c3c60789c105506"
-  }
+    "patches": [
+      "src_patches/v1_1_website_filters.pyfrag",
+      "src_patches/v1_2_compact_ui.pyfrag"
+    ]
+  },
+  "notes": [
+    "GUI smoke tests ran under a virtual X display. Windows uses Segoe UI Variable/Segoe UI when available.",
+    "Physical input replay and live Windows UI Automation still require final Windows-host testing."
+  ]
 }
