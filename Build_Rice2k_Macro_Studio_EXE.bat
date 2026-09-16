@@ -1,5 +1,5 @@
 @echo off
-title Build Rice2k Macro Studio v1.0 EXE
+title Build Rice2k Macro Studio v1.1 EXE
 cd /d "%~dp0"
 
 echo Installing/updating requirements...
@@ -18,6 +18,7 @@ pyinstaller ^
   --add-data "rice2k_macro_studio.png;." ^
   --add-data "Browser_Element_Capture_Helper.html;." ^
   --add-data "src_fragments;src_fragments" ^
+  --add-data "src_patches;src_patches" ^
   rice2k_macro_studio.py
 
 echo.
