@@ -1,0 +1,188 @@
+# Rice2k Macro Studio v1.2 - Compact UI Redesign
+APP_VERSION = "1.2 Compact UI Redesign"
+import tkinter.font as tkfont
+THEMES["dark"].update({"bg":"#08111F","panel":"#0D1A2B","panel2":"#0A1625","panel3":"#10243A","text":"#EEF5FF","sub":"#94B1D0","accent":"#178BFF","accent_hover":"#2C9BFF","accent_pressed":"#0D72D8","accent2":"#39D4C4","warning":"#FFC857","danger":"#FF4D5A","danger_hover":"#FF6671","success":"#35D487","border":"#21496D","input_bg":"#091523","select_bg":"#164C7D","disabled_bg":"#152438","disabled_fg":"#5F7790"})
+THEMES["light"].update({"panel3":"#EEF4FB","accent_hover":"#3A6FF0","accent_pressed":"#1D4ED8","danger_hover":"#D25555","input_bg":"#FFFFFF","select_bg":"#DDEBFF","disabled_bg":"#E8EDF3","disabled_fg":"#8994A3"})
+
+def _v12_build_style(self):
+    c = self.colors()
+    try: families={str(x) for x in tkfont.families(self)}
+    except Exception: families=set()
+    self.ui_font="Segoe UI Variable" if "Segoe UI Variable" in families else ("Segoe UI" if "Segoe UI" in families else "Arial")
+    self.mono_font="Cascadia Mono" if "Cascadia Mono" in families else ("Consolas" if "Consolas" in families else self.ui_font)
+    self.configure(bg=c["bg"])
+    self.option_add("*Font", (self.ui_font, 9))
+    self.style = ttk.Style()
+    try:
+        self.style.theme_use("clam")
+    except Exception:
+        pass
+    base=(self.ui_font,9); small=(self.ui_font,8); bold=(self.ui_font,9,"bold")
+    self.style.configure("TFrame", background=c["bg"])
+    self.style.configure("Panel.TFrame", background=c["panel"])
+    self.style.configure("Panel2.TFrame", background=c["panel2"])
+    self.style.configure("TLabel", background=c["bg"], foreground=c["text"], font=base)
+    self.style.configure("Panel.TLabel", background=c["panel"], foreground=c["text"], font=base)
+    self.style.configure("Panel2.TLabel", background=c["panel2"], foreground=c["text"], font=base)
+    self.style.configure("Header.TLabel", background=c["bg"], foreground=c["text"], font=(self.ui_font,18,"bold"))
+    self.style.configure("Sub.TLabel", background=c["bg"], foreground=c["sub"], font=small)
+    self.style.configure("Status.TLabel", background=c["panel"], foreground=c["accent"], font=(self.ui_font,10,"bold"))
+    self.style.configure("Warn.TLabel", background=c["panel"], foreground=c["warning"], font=bold)
+    self.style.configure("Success.TLabel", background=c["panel"], foreground=c["success"], font=bold)
+    self.style.configure("Help.TLabel", background=c["panel"], foreground=c["sub"], font=small)
+    self.style.configure("Section.TLabel", background=c["panel"], foreground=c["text"], font=(self.ui_font,11,"bold"))
+    self.style.configure("SidebarBrand.TLabel", background=c["panel2"], foreground=c["accent"], font=(self.ui_font,12,"bold"))
+    self.style.configure("SidebarSub.TLabel", background=c["panel2"], foreground=c["sub"], font=(self.ui_font,7))
+    self.style.configure("Footer.TLabel", background=c["panel2"], foreground=c["sub"], font=(self.ui_font,8))
+
+    def map_button(name, normal, hover, pressed, fg):
+        self.style.configure(name, font=bold if name != "TButton" else base, padding=(8,5), background=normal, foreground=fg, bordercolor=c["border"], focusthickness=1, focuscolor=c["border"])
+        self.style.map(name,
+            background=[("disabled",c["disabled_bg"]),("pressed",pressed),("active",hover),("focus",hover)],
+            foreground=[("disabled",c["disabled_fg"]),("pressed",fg),("active",fg),("focus",fg)],
+            bordercolor=[("active",c["accent"]),("focus",c["accent"]),("pressed",pressed)])
+    map_button("TButton", c["panel2"], c["panel3"], c["panel3"], c["text"])
+    map_button("Primary.TButton", c["accent"], c["accent_hover"], c["accent_pressed"], "#FFFFFF")
+    map_button("Accent.TButton", c["accent2"], "#5FE1D4", "#23B9AA", "#06131F")
+    map_button("Danger.TButton", c["danger"], c["danger_hover"], "#D93643", "#FFFFFF")
+    self.style.configure("Sidebar.TButton", font=base, padding=(7,5), anchor="w", background=c["panel2"], foreground=c["text"], bordercolor=c["panel2"])
+    self.style.map("Sidebar.TButton", background=[("active",c["panel3"]),("focus",c["panel3"]),("pressed",c["accent_pressed"])], foreground=[("disabled",c["disabled_fg"]),("active",c["text"]),("focus",c["text"]),("pressed","#FFFFFF")])
+    self.style.configure("SidebarActive.TButton", font=bold, padding=(7,5), anchor="w", background=c["accent_pressed"], foreground="#FFFFFF", bordercolor=c["accent"])
+    self.style.map("SidebarActive.TButton", background=[("active",c["accent"]),("focus",c["accent"]),("pressed",c["accent_pressed"])], foreground=[("active","#FFFFFF"),("focus","#FFFFFF"),("pressed","#FFFFFF")])
+
+    self.style.configure("TCheckbutton", background=c["panel"], foreground=c["text"], font=base, padding=(2,2))
+    self.style.map("TCheckbutton", background=[("active",c["panel"]),("focus",c["panel"]),("disabled",c["panel"])], foreground=[("disabled",c["disabled_fg"]),("active",c["text"]),("focus",c["text"])], indicatorcolor=[("selected",c["accent"]),("!selected",c["input_bg"]),("disabled",c["disabled_bg"])])
+    self.style.configure("TRadiobutton", background=c["panel"], foreground=c["text"], font=base, padding=(2,2))
+    self.style.map("TRadiobutton", background=[("active",c["panel"]),("focus",c["panel"]),("disabled",c["panel"])], foreground=[("disabled",c["disabled_fg"]),("active",c["text"]),("focus",c["text"])], indicatorcolor=[("selected",c["accent"]),("!selected",c["input_bg"]),("disabled",c["disabled_bg"])])
+
+    for name in ("TEntry","TSpinbox","TCombobox"):
+        self.style.configure(name, fieldbackground=c["input_bg"], background=c["panel2"], foreground=c["text"], bordercolor=c["border"], arrowcolor=c["text"], padding=3)
+        self.style.map(name, fieldbackground=[("disabled",c["disabled_bg"]),("readonly",c["input_bg"]),("focus",c["input_bg"])], background=[("active",c["panel3"]),("pressed",c["panel3"])], foreground=[("disabled",c["disabled_fg"]),("readonly",c["text"])], arrowcolor=[("disabled",c["disabled_fg"]),("active",c["accent"])])
+    self.style.configure("TScale", background=c["panel"], troughcolor=c["input_bg"], bordercolor=c["border"])
+    self.style.map("TScale", background=[("active",c["accent"]),("focus",c["accent"])])
+    self.style.configure("Vertical.TScrollbar", background=c["panel3"], troughcolor=c["panel2"], bordercolor=c["panel2"], arrowcolor=c["sub"])
+    self.style.map("Vertical.TScrollbar", background=[("active",c["accent"]),("pressed",c["accent_pressed"])], arrowcolor=[("active","#FFFFFF"),("pressed","#FFFFFF")])
+    self.style.configure("TLabelframe", background=c["panel"], foreground=c["text"], bordercolor=c["border"], relief="solid")
+    self.style.configure("TLabelframe.Label", background=c["panel"], foreground=c["text"], font=bold)
+    self.style.configure("Treeview", background=c["panel2"], fieldbackground=c["panel2"], foreground=c["text"], rowheight=22, bordercolor=c["border"], font=base)
+    self.style.map("Treeview", background=[("selected",c["select_bg"])], foreground=[("selected",c["text"])])
+    self.style.configure("Treeview.Heading", background=c["panel3"], foreground=c["text"], font=bold, padding=(5,4))
+    self.style.map("Treeview.Heading", background=[("active",c["accent_pressed"]),("pressed",c["accent_pressed"])])
+    self.option_add("*Listbox.background", c["panel2"]); self.option_add("*Listbox.foreground", c["text"])
+    self.option_add("*Listbox.selectBackground", c["select_bg"]); self.option_add("*Listbox.selectForeground", c["text"])
+    self.option_add("*Text.background", c["panel2"]); self.option_add("*Text.foreground", c["text"])
+    self.option_add("*Text.insertBackground", c["text"]); self.option_add("*Text.selectBackground", c["select_bg"]); self.option_add("*Text.selectForeground", c["text"])
+
+
+def _v12_build_layout(self):
+    self.geometry("1280x800"); self.minsize(980,620)
+    try:
+        ip=Path(resource_path("rice2k_macro_studio.png"))
+        if ip.exists(): self._app_icon=tk.PhotoImage(file=str(ip)); self.iconphoto(True,self._app_icon)
+    except Exception as exc: log_error("load_app_icon",exc)
+    self.columnconfigure(1, weight=1); self.rowconfigure(0, weight=1)
+    sidebar=ttk.Frame(self,style="Panel2.TFrame",width=152); sidebar.grid(row=0,column=0,sticky="ns"); sidebar.grid_propagate(False)
+    brand=ttk.Frame(sidebar,style="Panel2.TFrame"); brand.pack(fill="x",padx=8,pady=(8,6))
+    try:
+        self._sidebar_icon = self._app_icon.subsample(8, 8)
+        ttk.Label(brand, image=self._sidebar_icon, style="Panel2.TLabel").pack(side="left", padx=(0,6))
+    except Exception:
+        pass
+    bt=ttk.Frame(brand,style="Panel2.TFrame"); bt.pack(side="left",fill="x",expand=True)
+    ttk.Label(bt,text="Rice2k",style="SidebarBrand.TLabel").pack(anchor="w")
+    ttk.Label(bt,text="MACRO STUDIO",style="SidebarSub.TLabel").pack(anchor="w",pady=(1,0))
+    self.sidebar_buttons={}
+    for icon,label,cmd in [("⌂","Dashboard",self.show_dashboard),("▤","Recordings",self.show_recordings),("◎","Smart Targets",self.show_smart_actions),("⇧","Exports",self.show_exports),("◉","Web / Automation",self.show_automation),("▣","Calendar",self.show_calendar_guide),("⚒","Diagnostics",self.show_diagnostics),("⚙","Settings",self.show_settings),("?","Help",self.show_help)]:
+        b=ttk.Button(sidebar,text=f"{icon}  {label}",style="Sidebar.TButton",command=cmd); b.pack(fill="x",padx=7,pady=1); self.sidebar_buttons[label]=b
+    ttk.Frame(sidebar,style="Panel2.TFrame").pack(fill="both",expand=True)
+    ttk.Separator(sidebar,orient="horizontal").pack(fill="x",padx=10,pady=(4,6))
+    ttk.Label(sidebar,text="Rice2k",style="SidebarBrand.TLabel").pack(anchor="center")
+    ttk.Label(sidebar,text="Small Tools.\nBig Possibilities.",style="SidebarSub.TLabel",justify="center").pack(anchor="center",pady=(1,6))
+    ttk.Label(sidebar,text=f"v{APP_VERSION}",style="SidebarSub.TLabel").pack(anchor="center",pady=(0,8))
+
+    main=ttk.Frame(self); main.grid(row=0,column=1,sticky="nsew"); main.columnconfigure(0,weight=1); main.rowconfigure(2,weight=1)
+    header=ttk.Frame(main); header.grid(row=0,column=0,sticky="ew",padx=14,pady=(9,3)); header.columnconfigure(0,weight=1)
+    ttk.Label(header,textvariable=self.current_screen,style="Header.TLabel").grid(row=0,column=0,sticky="w")
+    quick=ttk.Frame(header); quick.grid(row=0,column=1,sticky="e")
+    ttk.Button(quick,text="? Help",command=self.show_help).pack(side="left",padx=2); ttk.Button(quick,text="⚙ Settings",command=self.show_settings).pack(side="left",padx=2)
+    status=ttk.Frame(main,style="Panel.TFrame"); status.grid(row=1,column=0,sticky="ew",padx=14,pady=(2,7)); status.columnconfigure(2,weight=1)
+    ttk.Label(status,text="●",style="Success.TLabel").grid(row=0,column=0,padx=(9,4),pady=5); ttk.Label(status,textvariable=self.status_var,style="Status.TLabel").grid(row=0,column=1,pady=5,sticky="w")
+    ttk.Label(status,textvariable=self.loaded_file_var,style="Help.TLabel").grid(row=0,column=2,padx=8,pady=5,sticky="e")
+    self.content=ttk.Frame(main); self.content.grid(row=2,column=0,sticky="nsew",padx=14,pady=(0,4)); self.content.columnconfigure(0,weight=1); self.content.rowconfigure(0,weight=1)
+    footer=ttk.Frame(main,style="Panel2.TFrame"); footer.grid(row=3,column=0,sticky="ew"); footer.columnconfigure(2,weight=1)
+    ttk.Label(footer,text="● Ready",style="Footer.TLabel").grid(row=0,column=0,padx=(12,8),pady=5,sticky="w"); ttk.Label(footer,textvariable=self.loaded_file_var,style="Footer.TLabel").grid(row=0,column=1,padx=8,pady=5,sticky="w"); ttk.Label(footer,text=str(APP_DIR),style="Footer.TLabel").grid(row=0,column=2,padx=8,pady=5,sticky="w")
+    self.show_dashboard()
+
+
+def _v12_set_sidebar_active(self, label):
+    aliases={"Smart Actions":"Smart Targets","Exports":"Exports","Automation":"Web / Automation","Calendar Guide":"Calendar","Help & Guide":"Help"}
+    target=aliases.get(label,label)
+    for name,btn in getattr(self,"sidebar_buttons",{}).items():
+        try: btn.configure(style="SidebarActive.TButton" if name==target else "Sidebar.TButton")
+        except Exception: pass
+
+
+def _v12_clear_content(self):
+    self._set_sidebar_active(self.current_screen.get())
+    for w in self.content.winfo_children():
+        w.destroy()
+
+
+def _v12_scroll_frame(self, parent):
+    c=self.colors(); canvas=tk.Canvas(parent,bg=c["panel"],highlightthickness=0,borderwidth=0); bar=ttk.Scrollbar(parent,orient="vertical",style="Vertical.TScrollbar",command=canvas.yview); frame=ttk.Frame(canvas,style="Panel.TFrame"); wid=canvas.create_window((0,0),window=frame,anchor="nw")
+    frame.bind("<Configure>",lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.bind("<Configure>",lambda e: canvas.itemconfigure(wid,width=max(1,e.width)))
+    def wheel(e):
+        try:
+            if getattr(e,"delta",0): canvas.yview_scroll((-1 if e.delta>0 else 1)*3,"units")
+            elif getattr(e,"num",None)==4: canvas.yview_scroll(-3,"units")
+            elif getattr(e,"num",None)==5: canvas.yview_scroll(3,"units")
+            return "break"
+        except Exception: return None
+    def bind(_=None):
+        canvas.bind_all("<MouseWheel>",wheel,add="+"); canvas.bind_all("<Button-4>",wheel,add="+"); canvas.bind_all("<Button-5>",wheel,add="+")
+    def unbind(_=None):
+        try: canvas.unbind_all("<MouseWheel>"); canvas.unbind_all("<Button-4>"); canvas.unbind_all("<Button-5>")
+        except Exception: pass
+    canvas.bind("<Enter>",bind); canvas.bind("<Leave>",unbind); frame.bind("<Enter>",bind); frame.bind("<Leave>",unbind)
+    canvas.configure(yscrollcommand=bar.set); canvas.grid(row=0,column=0,sticky="nsew"); bar.grid(row=0,column=1,sticky="ns"); parent.columnconfigure(0,weight=1); parent.rowconfigure(0,weight=1); self._active_scroll_canvas=canvas; return frame
+
+
+def _v12_help_text(self, parent, text, row, column=0, columnspan=2, wrap=860):
+    """Add muted explanatory text without crowding controls."""
+    label = ttk.Label(parent, text=text, style="Help.TLabel", wraplength=wrap, justify="left")
+    label.grid(row=row, column=column, columnspan=columnspan, sticky="w", padx=12, pady=(0, 5))
+    return label
+
+
+def _v12_show_dashboard(self):
+    self.current_screen.set("Dashboard"); self.clear_content(); f=self.scroll_frame(self.panel()); f.columnconfigure((0,1,2),weight=1)
+    ttk.Label(f,text="🎯  Recording Dashboard",style="Section.TLabel").grid(row=0,column=0,columnspan=3,sticky="w",padx=12,pady=(10,2))
+    self.help_text(f,"Start here. Click-Only Fast is recommended for most work: clicks, scroll, and optional keyboard without noisy mouse movement.",1,columnspan=3,wrap=1000)
+    controls=ttk.LabelFrame(f,text="Main Controls"); controls.grid(row=2,column=0,columnspan=3,sticky="ew",padx=12,pady=5); controls.columnconfigure((0,1,2,3,4),weight=1)
+    buttons=[("▶  Start\n"+self.hotkey_vars["start"].get().upper(),"Primary.TButton",self.start_recording),("■  Stop + Save\n"+self.hotkey_vars["stop"].get().upper(),"Accent.TButton",self.stop_recording),("Ⅱ  Pause / Resume\n"+self.hotkey_vars["pause"].get().upper(),"TButton",self.pause_resume),("▶  Play\n"+self.hotkey_vars["play"].get().upper(),"Primary.TButton",self.confirm_playback),("■  Emergency Stop\n"+self.hotkey_vars["emergency"].get().upper(),"Danger.TButton",self.emergency_stop)]
+    for i,(text,style,cmd) in enumerate(buttons): ttk.Button(controls,text=text,style=style,command=cmd).grid(row=0,column=i,sticky="nsew",padx=4,pady=7)
+    stats=ttk.Frame(f,style="Panel.TFrame"); stats.grid(row=3,column=0,columnspan=3,sticky="ew",padx=12,pady=4); stats.columnconfigure((0,1,2),weight=1)
+    for col,title,var in [(0,"☷ Actions Recorded",self.action_count_var),(1,"◷ Elapsed",self.elapsed_var),(2,"▶ Playback",self.playback_var)]:
+        box=ttk.LabelFrame(stats,text=title); box.grid(row=0,column=col,sticky="nsew",padx=4); ttk.Label(box,textvariable=var,style="Status.TLabel").pack(anchor="w",padx=9,pady=7)
+    left=ttk.LabelFrame(f,text="➤ What to Record"); left.grid(row=4,column=0,columnspan=2,sticky="nsew",padx=(12,5),pady=5); left.columnconfigure((0,1),weight=1)
+    opts=[("Mouse clicks",self.record_mouse_var),("Keyboard (optional)",self.record_keyboard_var),("Mouse movement path",self.record_mouse_moves_var),("Skip movement on playback",self.skip_moves_var),("Scroll wheel",self.record_scroll_var),("Mouse-only safe mode",self.mouse_safe_var)]
+    for i,(label,var) in enumerate(opts): ttk.Checkbutton(left,text=label,variable=var,command=self.save_vars).grid(row=i//2,column=i%2,sticky="w",padx=9,pady=4)
+    ttk.Label(left,text="Mode",style="Panel.TLabel").grid(row=3,column=0,sticky="w",padx=9,pady=(6,5)); mode=ttk.Combobox(left,textvariable=self.mode_var,values=["click_fast","physical","browser","window_aware"],state="readonly"); mode.grid(row=3,column=1,sticky="ew",padx=9,pady=(6,5)); mode.bind("<<ComboboxSelected>>",lambda e:self.apply_mode(self.mode_var.get()))
+    right=ttk.LabelFrame(f,text="⚙ Playback Settings"); right.grid(row=4,column=2,sticky="nsew",padx=(5,12),pady=5); right.columnconfigure(1,weight=1)
+    ttk.Label(right,text="Speed",style="Panel.TLabel").grid(row=0,column=0,sticky="w",padx=9,pady=5); speed=ttk.Scale(right,from_=0.5,to=100,variable=self.speed_var,command=self.on_speed_change); speed.grid(row=0,column=1,sticky="ew",padx=8); speed.bind("<ButtonRelease-1>",lambda e:self.save_vars(),add="+"); self.speed_label=ttk.Label(right,text=f"{self.speed_var.get():.1f}x",style="Status.TLabel"); self.speed_label.grid(row=0,column=2,padx=9)
+    ttk.Label(right,text="Repeat count",style="Panel.TLabel").grid(row=1,column=0,sticky="w",padx=9,pady=5); ttk.Spinbox(right,from_=1,to=999,textvariable=self.repeat_var,width=8,command=self.save_vars).grid(row=1,column=1,sticky="w",padx=8)
+    ttk.Label(right,text="Delay between runs (s)",style="Panel.TLabel").grid(row=2,column=0,sticky="w",padx=9,pady=5); ttk.Spinbox(right,from_=0,to=99999,textvariable=self.delay_var,width=8,command=self.save_vars).grid(row=2,column=1,sticky="w",padx=8)
+    quick=ttk.LabelFrame(f,text="⚡ Quick Actions"); quick.grid(row=5,column=0,sticky="nsew",padx=(12,5),pady=5);
+    ttk.Button(quick,text="⇧ Export Current",style="Accent.TButton",command=lambda:self.show_exports()).pack(side="left",padx=5,pady=8); ttk.Button(quick,text="▣ Load Recording",command=self.choose_recording).pack(side="left",padx=5,pady=8); ttk.Button(quick,text="? How It Works",command=self.show_help).pack(side="left",padx=5,pady=8)
+    tips=ttk.LabelFrame(f,text="💡 Tips"); tips.grid(row=5,column=1,sticky="nsew",padx=5,pady=5); ttk.Label(tips,text="• Click-Only Fast for most tasks\n• Smart Targets for reliable replay\n• Web Capture for browser automation\n• Scroll is independently recordable",style="Help.TLabel",justify="left").pack(anchor="w",padx=9,pady=7)
+    keys=ttk.LabelFrame(f,text="⌨ Hotkeys"); keys.grid(row=5,column=2,sticky="nsew",padx=(5,12),pady=5); ttk.Label(keys,text=f"Start  {self.hotkey_vars['start'].get().upper()}\nStop + Save  {self.hotkey_vars['stop'].get().upper()}\nPause  {self.hotkey_vars['pause'].get().upper()}\nPlay  {self.hotkey_vars['play'].get().upper()}\nEmergency  {self.hotkey_vars['emergency'].get().upper()}",style="Help.TLabel",justify="left").pack(anchor="w",padx=9,pady=7)
+
+
+MouseRecorderApp._build_style = _v12_build_style
+MouseRecorderApp._build_layout = _v12_build_layout
+MouseRecorderApp._set_sidebar_active = _v12_set_sidebar_active
+MouseRecorderApp.clear_content = _v12_clear_content
+MouseRecorderApp.scroll_frame = _v12_scroll_frame
+MouseRecorderApp.help_text = _v12_help_text
+MouseRecorderApp.show_dashboard = _v12_show_dashboard
