@@ -48,31 +48,19 @@ v1.2 keeps the full v1.1 automation feature set and replaces the visual shell wi
 ### UI changes
 
 - Compact **152 px icon + label sidebar**
-- New Rice2k **mouse + gear** visual identity
+- Rice2k **mouse + gear** visual identity
 - Tighter dashboard cards and page spacing
 - Icon-forward Start / Stop + Save / Pause / Play / Emergency controls
 - Compact quick actions, tips, playback settings, and hotkey reference
 - **Segoe UI Variable** on supported Windows versions, falling back to Segoe UI
-- Dark native-style entries, spinboxes, comboboxes, treeviews, scrollbars, and selections
+- Dark entries, spinboxes, comboboxes, treeviews, scrollbars, and selections
 - Explicit hover / focus / pressed / disabled / readonly colors
-- Fixes the bright-white Windows ttk highlight fallback in dark mode
+- Fix for the bright-white Windows ttk highlight fallback in dark mode
 - Mouse-wheel scrolling on scrollable pages
 - Active sidebar state instead of white focus highlighting
 
 Full UI rules: **[UI Design Standards](docs/UI_DESIGN_STANDARDS.md)**  
 Detailed redesign notes: **[v1.2 UI Redesign](docs/V1_2_UI_REDESIGN.md)**
-
----
-
-## 🖥 UI Preview
-
-### Design direction
-
-![Rice2k Macro Studio v1.2 UI concept](docs/images/ui-concept-v1.2.png)
-
-### Implemented compact layout
-
-![Rice2k Macro Studio v1.2 implemented UI](docs/images/ui-implemented-v1.2.png)
 
 ---
 
@@ -116,7 +104,7 @@ Default hotkeys: **F8 Start · F9 Stop + Save · F10 Pause/Resume · F12 Play ·
 - DPI and window metadata
 
 ### ▶ Playback
-- Speed control up to high-speed replay
+- Adjustable speed
 - Repeat count
 - Delay between runs
 - Countdown
@@ -124,7 +112,7 @@ Default hotkeys: **F8 Start · F9 Stop + Save · F10 Pause/Resume · F12 Play ·
 - Emergency stop
 - Interruptible waits
 - Held mouse/key cleanup
-- Target validation
+- Target-window validation
 - Pause if the target application/window changes
 
 ### 🧠 Windows Smart Targets
