@@ -20,10 +20,14 @@
 
 ## Quick Start
 
-1. Download or clone the repository.
+1. Download or clone the **entire** repository.
 2. On Windows, run `Run_Rice2k_Macro_Studio.bat`.
-3. The launcher checks Python, Tkinter, dependencies, and source compilation before opening the app.
+3. The launcher checks Python, Tkinter, dependencies, the source loader, and all application source fragments before opening the app.
 4. For environment troubleshooting, run `Run_Setup_Diagnostics.bat`.
+
+### Source layout
+
+`rice2k_macro_studio.py` is the small entry-point/loader. The validated application source is stored in order under `src_fragments/part_01.pyfrag` through `part_14.pyfrag`. The loader joins those files and executes them as one application module. Keep the `src_fragments` folder beside the launcher/source file when cloning, downloading, or building.
 
 ### Recommended recording settings
 
@@ -49,7 +53,7 @@ For a Windows/native calendar:
 For a website calendar:
 
 1. Create/open `Browser_Element_Capture_Helper.html`.
-2. Start the Smart Capture bookmarklet.
+2. Start the Rice2k Macro Studio Smart Capture bookmarklet.
 3. Open the website calendar.
 4. Choose **Mark Next = TODAY**.
 5. Click today's date.
@@ -78,7 +82,7 @@ Run:
 
 `Build_Rice2k_Macro_Studio_EXE.bat`
 
-The expected output is:
+The build bundles the application source fragments, browser capture helper, and PNG icon. The expected output is:
 
 `dist\Rice2k Macro Studio.exe`
 
