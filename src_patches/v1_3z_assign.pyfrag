@@ -1,0 +1,12 @@
+MouseRecorderApp._build_style = _v13_build_style
+MouseRecorderApp._load_ui_images = _v13_load_ui_images
+MouseRecorderApp._hover_button = _v13_hover_button
+MouseRecorderApp._card = _v13_card
+MouseRecorderApp._card_title = _v13_card_title
+MouseRecorderApp._build_layout = _v13_build_layout
+MouseRecorderApp._global_mousewheel = _v13_global_mousewheel
+MouseRecorderApp._update_clock = _v13_update_clock
+MouseRecorderApp._set_sidebar_active = _v13_set_sidebar_active
+MouseRecorderApp.panel = _v13_panel
+MouseRecorderApp.scroll_frame = _v13_scroll_frame
+MouseRecorderApp.show_dashboard = _v13_show_dashboard
