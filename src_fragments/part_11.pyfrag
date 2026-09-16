@@ -1,0 +1,144 @@
+        ttk.Label(f, text="Automation Mode", style="Panel.TLabel", font=("Segoe UI", 16, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", padx=18, pady=(14, 4))
+        self.help_text(f, "Modes are presets. They change what gets recorded and how strictly playback watches the target application.", 1, columnspan=2)
+        modes = [
+            ("click_fast", "Click-Only Fast", "Best default: clicks + scroll + optional keyboard, without noisy mouse movement."),
+            ("physical", "Physical Replay", "Records/replays physical mouse movement, clicks, scroll, and optional keyboard."),
+            ("browser", "Browser Element Capture", "Creates a bookmarklet helper that captures URL/title/role/labels/selectors without input values."),
+            ("window_aware", "Window-Aware", "Uses process/window metadata and pauses if the target changes."),
+        ]
+        row = 2
+        for value, title, desc in modes:
+            box = ttk.LabelFrame(f, text=title)
+            box.grid(row=row, column=0, columnspan=2, sticky="ew", padx=18, pady=7)
+            rb = ttk.Radiobutton(box, text=desc, value=value, variable=self.mode_var, command=lambda v=value: self.apply_mode(v))
+            rb.pack(anchor="w", padx=12, pady=9)
+            self.tip(rb, desc)
+            row += 1
+        calendar_box = ttk.LabelFrame(f, text="Calendar + Dynamic Dates")
+        calendar_box.grid(row=row, column=0, columnspan=2, sticky="ew", padx=18, pady=7)
+        calendar_box.columnconfigure(0, weight=1)
+        ttk.Label(
+            calendar_box,
+            text="Use a TODAY rule when a calendar step should select the actual current date every time instead of replaying the date originally recorded.",
+            style="Help.TLabel", wraplength=760, justify="left"
+        ).grid(row=0, column=0, sticky="w", padx=12, pady=8)
+        cal_btn = ttk.Button(calendar_box, text="Open Calendar Guide", style="Accent.TButton", command=self.show_calendar_guide)
+        cal_btn.grid(row=0, column=1, sticky="e", padx=12, pady=8)
+        self.tip(cal_btn, "Open step-by-step instructions for Windows/native calendars and website date pickers.")
+        row += 1
+
+        smart_box = ttk.LabelFrame(f, text="Smart Target Recognition")
+        smart_box.grid(row=row, column=0, columnspan=2, sticky="ew", padx=18, pady=7)
+        st1 = ttk.Checkbutton(smart_box, text="Record Windows UI Automation target details", variable=self.smart_target_var, command=self.save_vars)
+        st1.grid(row=0, column=0, sticky="w", padx=12, pady=7)
+        self.tip(st1, "On clicks, try to record the actual Windows control name/type/AutomationId instead of relying only on coordinates.")
+        st2 = ttk.Checkbutton(smart_box, text="Try semantic target first during playback", variable=self.smart_playback_var, command=self.save_vars)
+        st2.grid(row=0, column=1, sticky="w", padx=12, pady=7)
+        self.tip(st2, "For recognized Windows controls, try UI Automation invoke/select before falling back to physical coordinates.")
+        st3 = ttk.Checkbutton(smart_box, text="Detect / allow dynamic Calendar TODAY rules", variable=self.calendar_today_var, command=self.save_vars)
+        st3.grid(row=1, column=0, columnspan=2, sticky="w", padx=12, pady=7)
+        self.tip(st3, "Lets calendar clicks be marked TODAY so future runs search for today's date rather than reusing the date originally recorded.")
+        row += 1
+
+        ttk.Label(f, text="Run behavior", style="Panel.TLabel").grid(row=row, column=0, sticky="w", padx=18, pady=8)
+        run_box = ttk.Combobox(f, textvariable=self.run_behavior_var, values=["manual", "after_save", "on_start"], state="readonly", width=18)
+        run_box.grid(row=row, column=1, sticky="w", padx=12, pady=8)
+        self.tip(run_box, "Manual waits for you to press Play. After Save can replay a recording after it is saved. On Start can load/run the last recording at app launch.")
+        row += 1
+        validate = ttk.Checkbutton(f, text="Validate target before click/scroll", variable=self.target_validation_var, command=self.save_vars)
+        validate.grid(row=row, column=0, sticky="w", padx=18, pady=8)
+        self.tip(validate, "Compare the recorded process/window with the current foreground target before a click or scroll.")
+        pause_target = ttk.Checkbutton(f, text="Pause if target changes", variable=self.pause_target_var, command=self.save_vars)
+        pause_target.grid(row=row, column=1, sticky="w", padx=12, pady=8)
+        self.tip(pause_target, "Pause playback instead of clicking into the wrong application when target validation detects a change.")
+        row += 1
+        ttk.Button(f, text="Create Browser Capture Helper", command=self.create_browser_helper).grid(row=row, column=0, sticky="ew", padx=18, pady=10)
+        ttk.Button(f, text="Open Website Actions Folder", command=lambda: open_folder(WEBSITE_ACTIONS_DIR)).grid(row=row, column=1, sticky="ew", padx=18, pady=10)
+        row += 1
+        note = "Physical replay controls the active desktop. For true simultaneous work, use browser element automation, a VM, Remote Desktop, another Windows session, or another PC."
+        ttk.Label(f, text=note, style="Warn.TLabel", wraplength=850, justify="left").grid(row=row, column=0, columnspan=2, sticky="w", padx=18, pady=14)
+
+    def apply_mode(self, mode):
+        self.mode_var.set(mode)
+        if mode == "click_fast":
+            self.record_mouse_var.set(True); self.record_scroll_var.set(True); self.record_mouse_moves_var.set(False); self.skip_moves_var.set(True)
+        elif mode == "physical":
+            self.record_mouse_var.set(True); self.record_scroll_var.set(True); self.record_mouse_moves_var.set(True); self.skip_moves_var.set(False)
+        elif mode == "browser":
+            self.record_mouse_var.set(True); self.record_scroll_var.set(True); self.record_mouse_moves_var.set(False); self.skip_moves_var.set(True)
+        elif mode == "window_aware":
+            self.record_mouse_var.set(True); self.record_scroll_var.set(True); self.record_mouse_moves_var.set(False); self.skip_moves_var.set(True); self.target_validation_var.set(True); self.pause_target_var.set(True)
+        self.save_vars()
+
+
+    def show_calendar_guide(self):
+        self.current_screen.set("Calendar Guide")
+        self.clear_content()
+        f = self.scroll_frame(self.panel())
+        f.columnconfigure(0, weight=1)
+
+        today = datetime.date.today()
+        today_display = today.strftime("%A, %B %d, %Y")
+
+        ttk.Label(f, text="Calendar + Dynamic Date Guide", style="Panel.TLabel", font=("Segoe UI", 16, "bold")).grid(row=0, column=0, sticky="w", padx=18, pady=(14, 4))
+        ttk.Label(
+            f,
+            text=f"Use dynamic calendar rules when a recording must choose the date that is current when it runs. Today's test date is: {today_display}.",
+            style="Help.TLabel", wraplength=900, justify="left"
+        ).grid(row=1, column=0, sticky="w", padx=18, pady=(0, 10))
+
+        sections = [
+            (
+                "Why not use coordinates?",
+                "A calendar changes position as months change. Clicking the same x/y coordinate tomorrow or next month can choose the wrong day. "
+                "The TODAY rule stores the intention 'select today's date' and searches for the date again during replay."
+            ),
+            (
+                "Windows / native application calendar",
+                "1. Record yourself opening the calendar and clicking the date. "
+                "2. Open Smart Targets + Actions. "
+                "3. Select the recognized date click. "
+                "4. Click Mark Selected = TODAY. "
+                "5. Click Save Edited Copy. "
+                "6. On future replay, Windows UI Automation searches the current target window for today's accessible date label. "
+                "If the app was closed and reopened, Rice2k Macro Studio can re-find the window by process/title instead of depending only on the old HWND."
+            ),
+            (
+                "Website calendar / date picker",
+                "1. Open Automation and create the Browser Element Capture helper. "
+                "2. Start the Rice2k Macro Studio Smart Capture bookmarklet on the website. "
+                "3. Open the date picker. "
+                "4. Click Mark Next = TODAY in the floating capture panel. "
+                "5. Click today's date. "
+                "6. Download or copy the capture JSON. "
+                "7. The browser replay recalculates today's date and looks for semantic date attributes/labels instead of the original coordinate."
+            ),
+            (
+                "How website TODAY detection works",
+                "The browser helper checks strong signals first: aria-current='date', data-date='YYYY-MM-DD', datetime='YYYY-MM-DD', "
+                "time[datetime], accessible labels/titles containing today's month/day/year, and then a calendar-scoped day-number fallback. "
+                "If the calendar provides a clear Today/Current Date control, that can also be used."
+            ),
+            (
+                "How Windows TODAY detection works",
+                "Windows smart-target playback first resolves the current application window. It then scores UI Automation descendants by today's accessible date label, "
+                "control type and class. A bare day number such as '16' is only used as a fallback when it is unique among compatible controls."
+            ),
+            (
+                "If TODAY cannot be found",
+                "The app should not guess blindly. Open the calendar manually and inspect Smart Targets. Make sure Windows UI Automation is available, "
+                "or use Browser Element Capture for websites. Some custom-drawn calendars expose no accessible date information; those may require coordinate playback."
+            ),
+            (
+                "Recurring calendar jobs",
+                "TODAY is useful for 'pick today's date'. A future enhancement can use rules such as TOMORROW, +N days, first/last day of month, next weekday, or a date from a field."
+            ),
+        ]
+
+        row = 2
+        for title, desc in sections:
+            box = ttk.LabelFrame(f, text=title)
+            box.grid(row=row, column=0, sticky="ew", padx=18, pady=6)
+            ttk.Label(box, text=desc, style="Help.TLabel", wraplength=900, justify="left").pack(anchor="w", padx=12, pady=10)
+            row += 1
+
