@@ -1,0 +1,219 @@
+def _v13_global_mousewheel(self, event):
+    canvas = getattr(self, "_wheel_canvas", None)
+    if canvas is None:
+        return None
+    try:
+        if getattr(event, "delta", 0):
+            canvas.yview_scroll(-3 if event.delta > 0 else 3, "units")
+        elif getattr(event, "num", None) == 4:
+            canvas.yview_scroll(-3, "units")
+        elif getattr(event, "num", None) == 5:
+            canvas.yview_scroll(3, "units")
+        return "break"
+    except Exception:
+        return None
+
+
+def _v13_update_clock(self):
+    now = datetime.datetime.now()
+    try:
+        text = now.strftime("%#I:%M:%S %p") if os.name == "nt" else now.strftime("%-I:%M:%S %p")
+    except Exception:
+        text = now.strftime("%I:%M:%S %p").lstrip("0")
+    try:
+        self.clock_var.set(text)
+        self.after(1000, self._update_clock)
+    except Exception:
+        pass
+
+
+def _v13_set_sidebar_active(self, label):
+    c = self.colors()
+    aliases = {
+        "Smart Actions": "Smart Targets",
+        "Exports": "Export",
+        "Automation": "Web Capture",
+        "Calendar Guide": "Calendar",
+        "Help & Guide": "Help",
+    }
+    target = aliases.get(label, label)
+    for name, btn in getattr(self, "sidebar_buttons", {}).items():
+        try:
+            if name == target:
+                btn.configure(bg=c["accent_pressed"], fg="#FFFFFF", activebackground=c["accent"], activeforeground="#FFFFFF")
+            else:
+                btn.configure(bg=c["panel2"], fg=c["sub"], activebackground=c["panel3"], activeforeground=c["text"])
+        except Exception:
+            pass
+
+
+def _v13_panel(self):
+    c = self.colors()
+    p = tk.Frame(self.content, bg=c["panel"])
+    p.grid(row=0, column=0, sticky="nsew")
+    p.grid_columnconfigure(0, weight=1)
+    p.grid_rowconfigure(0, weight=1)
+    return p
+
+
+def _v13_scroll_frame(self, parent):
+    c = self.colors()
+    canvas = tk.Canvas(parent, bg=c["panel"], highlightthickness=0, borderwidth=0)
+    bar = ttk.Scrollbar(parent, orient="vertical", style="Vertical.TScrollbar", command=canvas.yview)
+    frame = tk.Frame(canvas, bg=c["panel"])
+    wid = canvas.create_window((0, 0), window=frame, anchor="nw")
+
+    def refresh(_event=None):
+        try:
+            bbox = canvas.bbox("all")
+            if bbox:
+                canvas.configure(scrollregion=bbox)
+                content_h = bbox[3] - bbox[1]
+                view_h = max(1, canvas.winfo_height())
+                if content_h > view_h + 4:
+                    bar.grid()
+                else:
+                    bar.grid_remove()
+        except Exception:
+            pass
+
+    def resize(event):
+        try:
+            canvas.itemconfigure(wid, width=max(1, event.width))
+            refresh()
+        except Exception:
+            pass
+
+    frame.bind("<Configure>", refresh)
+    canvas.bind("<Configure>", resize)
+    canvas.bind("<Enter>", lambda _e: setattr(self, "_wheel_canvas", canvas))
+    frame.bind("<Enter>", lambda _e: setattr(self, "_wheel_canvas", canvas))
+    canvas.bind("<Leave>", lambda _e: setattr(self, "_wheel_canvas", None))
+    frame.bind("<Leave>", lambda _e: setattr(self, "_wheel_canvas", None))
+    canvas.configure(yscrollcommand=bar.set)
+    canvas.grid(row=0, column=0, sticky="nsew")
+    bar.grid(row=0, column=1, sticky="ns")
+    parent.grid_columnconfigure(0, weight=1)
+    parent.grid_rowconfigure(0, weight=1)
+    self._active_scroll_canvas = canvas
+    self.after_idle(refresh)
+    return frame
+
+
+def _v13_show_dashboard(self):
+    c = self.colors()
+    self.current_screen.set("Dashboard")
+    self.clear_content()
+    f = self.scroll_frame(self.panel())
+    for col in range(6):
+        f.grid_columnconfigure(col, weight=1, uniform="dash")
+
+    hero = self._card(f, 0, 0, columnspan=6, padx=0, pady=(0, 7))
+    hero.grid_columnconfigure(0, weight=1)
+    title = tk.Frame(hero, bg=c["card"])
+    title.grid(row=0, column=0, sticky="ew", padx=14, pady=(11, 5))
+    tk.Label(title, text="🎯  Recording Dashboard", bg=c["card"], fg=c["text"], font=(self.ui_font, 17, "bold")).pack(side="left")
+    chips = tk.Frame(title, bg=c["card"])
+    chips.pack(side="right")
+    ready = tk.Label(chips, text="●  Ready", bg="#0B3A2A", fg=c["success"], font=(self.ui_font, 10, "bold"), padx=12, pady=6)
+    ready.pack(side="left", padx=4)
+    loaded = tk.Label(chips, textvariable=self.loaded_file_var, bg=c["panel2"], fg=c["sub"], font=(self.ui_font, 9), padx=12, pady=6)
+    loaded.pack(side="left", padx=4)
+    tk.Label(hero, text="Start here. Click-Only Fast is recommended for most work. Record clicks, scroll, and optional keyboard without storing every tiny mouse movement.", bg=c["card"], fg=c["sub"], font=(self.ui_font, 10), anchor="w", justify="left").grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 11))
+
+    controls = self._card(f, 1, 0, columnspan=6, padx=0, pady=7)
+    controls.grid_columnconfigure((0, 1, 2, 3, 4), weight=1, uniform="controls")
+    control_specs = [
+        ("▶", "Start Recording", self.hotkey_vars["start"].get().upper(), c["accent"], c["accent_hover"], self.start_recording),
+        ("■", "Stop + Save", self.hotkey_vars["stop"].get().upper(), c["panel3"], "#173653", self.stop_recording),
+        ("Ⅱ", "Pause / Resume", self.hotkey_vars["pause"].get().upper(), c["panel3"], "#173653", self.pause_resume),
+        ("▶", "Play", self.hotkey_vars["play"].get().upper(), c["panel3"], "#173653", self.confirm_playback),
+        ("■", "Emergency Stop", self.hotkey_vars["emergency"].get().upper(), c["danger"], c["danger_hover"], self.emergency_stop),
+    ]
+    for i, (symbol, label, key, bg, hover, cmd) in enumerate(control_specs):
+        b = tk.Button(controls, text=f"{symbol}   {label}\n{key}", command=cmd, bg=bg, fg="#FFFFFF", activebackground=hover, activeforeground="#FFFFFF", relief="flat", bd=0, font=(self.ui_font, 11, "bold"), cursor="hand2", padx=8, pady=10)
+        b.grid(row=0, column=i, sticky="nsew", padx=7, pady=11)
+        self._hover_button(b, bg, hover, "#FFFFFF")
+
+    stat_specs = [
+        ("☷", "Actions Recorded", self.action_count_var, c["text"]),
+        ("◷", "Elapsed Time", self.elapsed_var, "#43B9FF"),
+        ("▶", "Playback Status", self.playback_var, c["success"]),
+    ]
+    for idx, (icon, label, var, value_color) in enumerate(stat_specs):
+        card = self._card(f, 2, idx * 2, columnspan=2, padx=(0 if idx == 0 else 5, 0 if idx == 2 else 5), pady=7)
+        inner = tk.Frame(card, bg=c["card"])
+        inner.pack(fill="both", expand=True, padx=14, pady=10)
+        tk.Label(inner, text=icon, bg=c["card"], fg=c["text"], font=(self.ui_font, 22)).pack(side="left", padx=(2, 14))
+        text = tk.Frame(inner, bg=c["card"])
+        text.pack(side="left", fill="both", expand=True)
+        tk.Label(text, text=label, bg=c["card"], fg=c["sub"], font=(self.ui_font, 10), anchor="w").pack(anchor="w")
+        tk.Label(text, textvariable=var, bg=c["card"], fg=value_color, font=(self.ui_font, 14, "bold"), anchor="w").pack(anchor="w", pady=(2, 0))
+
+    record = self._card(f, 3, 0, columnspan=4, padx=(0, 6), pady=7)
+    self._card_title(record, "What to Record", "➤", c["text"], self.show_help)
+    opts = tk.Frame(record, bg=c["card"])
+    opts.pack(fill="both", expand=True, padx=15, pady=10)
+    opts.grid_columnconfigure((0, 1), weight=1)
+    option_specs = [
+        ("Mouse clicks", self.record_mouse_var), ("Keyboard (optional)", self.record_keyboard_var),
+        ("Mouse movement path", self.record_mouse_moves_var), ("Skip movement on playback", self.skip_moves_var),
+        ("Scroll wheel", self.record_scroll_var), ("Mouse-only safe mode", self.mouse_safe_var),
+    ]
+    for i, (label, var) in enumerate(option_specs):
+        ttk.Checkbutton(opts, text=label, variable=var, command=self.save_vars).grid(row=i // 2, column=i % 2, sticky="w", padx=(0, 18), pady=5)
+
+    mode_map = {"click_fast": "Click-Only Fast (Recommended)", "physical": "Physical Replay", "browser": "Browser Element Capture", "window_aware": "Window-Aware"}
+    reverse_mode = {v: k for k, v in mode_map.items()}
+    self._dashboard_mode_display = tk.StringVar(value=mode_map.get(self.mode_var.get(), self.mode_var.get()))
+    mode = ttk.Combobox(opts, textvariable=self._dashboard_mode_display, values=list(mode_map.values()), state="readonly")
+    mode.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(9, 2))
+    def set_mode(_event=None):
+        raw = reverse_mode.get(self._dashboard_mode_display.get(), "click_fast")
+        self.mode_var.set(raw)
+        self.apply_mode(raw)
+    mode.bind("<<ComboboxSelected>>", set_mode)
+
+    playback = self._card(f, 3, 4, columnspan=2, padx=(6, 0), pady=7)
+    self._card_title(playback, "Playback Settings", "⚙", c["text"])
+    pbody = tk.Frame(playback, bg=c["card"])
+    pbody.pack(fill="both", expand=True, padx=15, pady=12)
+    pbody.grid_columnconfigure(1, weight=1)
+    tk.Label(pbody, text="Speed", bg=c["card"], fg=c["text"], font=(self.ui_font, 10)).grid(row=0, column=0, sticky="w", pady=7)
+    speed = ttk.Scale(pbody, from_=0.5, to=100, variable=self.speed_var, command=self.on_speed_change)
+    speed.grid(row=0, column=1, sticky="ew", padx=12)
+    speed.bind("<ButtonRelease-1>", lambda _e: self.save_vars(), add="+")
+    self.speed_label = tk.Label(pbody, text=f"{self.speed_var.get():.1f}x", bg=c["card"], fg="#43B9FF", font=(self.ui_font, 13, "bold"))
+    self.speed_label.grid(row=0, column=2, padx=(5, 0))
+    tk.Label(pbody, text="Repeat count", bg=c["card"], fg=c["text"], font=(self.ui_font, 10)).grid(row=1, column=0, sticky="w", pady=7)
+    ttk.Spinbox(pbody, from_=1, to=999, textvariable=self.repeat_var, width=9, command=self.save_vars).grid(row=1, column=1, sticky="w", padx=12)
+    tk.Label(pbody, text="Delay between runs (s)", bg=c["card"], fg=c["text"], font=(self.ui_font, 10)).grid(row=2, column=0, sticky="w", pady=7)
+    ttk.Spinbox(pbody, from_=0, to=99999, textvariable=self.delay_var, width=9, command=self.save_vars).grid(row=2, column=1, sticky="w", padx=12)
+
+    quick = self._card(f, 4, 0, columnspan=2, padx=(0, 5), pady=7)
+    self._card_title(quick, "Quick Actions", "⚡", c["text"])
+    qb = tk.Frame(quick, bg=c["card"])
+    qb.pack(fill="both", expand=True, padx=12, pady=12)
+    export_btn = tk.Button(qb, text="⇧\nExport Current\nRecording", command=self.show_exports, bg="#087F54", fg="#FFFFFF", activebackground="#0A9A66", activeforeground="#FFFFFF", relief="flat", bd=0, font=(self.ui_font, 10, "bold"), padx=14, pady=12, cursor="hand2")
+    export_btn.pack(side="left", fill="both", expand=True, padx=4)
+    self._hover_button(export_btn, "#087F54", "#0A9A66", "#FFFFFF")
+    for text, cmd in (("▣\nLoad Recording", self.choose_recording), ("?\nHow It Works", self.show_help)):
+        b = tk.Button(qb, text=text, command=cmd, bg=c["panel3"], fg=c["text"], activebackground="#173653", activeforeground=c["text"], relief="flat", bd=0, font=(self.ui_font, 10), padx=12, pady=12, cursor="hand2")
+        b.pack(side="left", fill="both", expand=True, padx=4)
+        self._hover_button(b, c["panel3"], "#173653", c["text"])
+
+    tips = self._card(f, 4, 2, columnspan=2, padx=5, pady=7)
+    self._card_title(tips, "Tips", "💡", c["text"])
+    tip_text = "• Click-Only Fast works best for most tasks\n• Use Smart Targets for reliable replay\n• Use Web Capture for browser automation\n• Enable scroll when your task requires it\n• Help & Guide includes more examples"
+    tk.Label(tips, text=tip_text, bg=c["card"], fg=c["sub"], justify="left", font=(self.ui_font, 10), anchor="nw").pack(fill="both", expand=True, padx=16, pady=12)
+
+    hot = self._card(f, 4, 4, columnspan=2, padx=(5, 0), pady=7)
+    self._card_title(hot, "Hotkeys", "⌨", c["text"])
+    rows = tk.Frame(hot, bg=c["card"])
+    rows.pack(fill="both", expand=True, padx=16, pady=10)
+    hotkeys = [("Start Recording", self.hotkey_vars["start"].get().upper()), ("Stop + Save", self.hotkey_vars["stop"].get().upper()), ("Pause / Resume", self.hotkey_vars["pause"].get().upper()), ("Play", self.hotkey_vars["play"].get().upper()), ("Emergency Stop", self.hotkey_vars["emergency"].get().upper())]
+    for r, (label, key) in enumerate(hotkeys):
+        tk.Label(rows, text="■", bg=c["card"], fg="#5DAEFF", font=(self.ui_font, 8)).grid(row=r, column=0, sticky="w", pady=3)
+        tk.Label(rows, text=label, bg=c["card"], fg=c["text"], font=(self.ui_font, 9)).grid(row=r, column=1, sticky="w", padx=8, pady=3)
+        tk.Label(rows, text=key, bg=c["card"], fg=c["text"], font=(self.ui_font, 9, "bold")).grid(row=r, column=2, sticky="e", padx=(16, 0), pady=3)
+    rows.grid_columnconfigure(1, weight=1)
