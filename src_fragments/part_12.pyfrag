@@ -1,0 +1,150 @@
+        test_box = ttk.LabelFrame(f, text="Calendar TODAY Self-Test")
+        test_box.grid(row=row, column=0, sticky="ew", padx=18, pady=8)
+        test_box.columnconfigure(1, weight=1)
+        b_test = ttk.Button(test_box, text="Run Calendar Test", style="Accent.TButton", command=self.run_calendar_today_test)
+        b_test.grid(row=0, column=0, sticky="w", padx=12, pady=10)
+        self.tip(b_test, "Test the app's current-date label matching and report whether Windows UI Automation is available.")
+        ttk.Label(test_box, textvariable=self.calendar_test_var, style="Panel.TLabel", wraplength=700, justify="left").grid(row=0, column=1, sticky="w", padx=12, pady=10)
+        row += 1
+
+        buttons = ttk.Frame(f, style="Panel.TFrame")
+        buttons.grid(row=row, column=0, sticky="ew", padx=18, pady=(4, 16))
+        ttk.Button(buttons, text="Open Smart Targets", command=self.show_smart_actions).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Create Browser Helper", command=self.create_browser_helper).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Open Website Actions Folder", command=lambda: open_folder(WEBSITE_ACTIONS_DIR)).pack(side="left", padx=4)
+
+    def run_calendar_today_test(self):
+        try:
+            today = datetime.date.today()
+            variants = sorted(today_label_variants(today))
+            test_inputs = [
+                today.isoformat(),
+                f"{today.strftime('%B')} {today.day}, {today.year}",
+                f"{today.strftime('%A')}, {today.strftime('%B')} {today.day}, {today.year}",
+                today.strftime("%m/%d/%Y"),
+            ]
+            matching = all(looks_like_today_label(x, today) for x in test_inputs)
+            uia_status = "available" if (Desktop is not None and sys.platform.startswith("win")) else (
+                "not available on this system" if sys.platform.startswith("win") else "Windows-only; not testable on this OS"
+            )
+            status = (
+                f"{'PASS' if matching else 'FAIL'} — date-label matching; "
+                f"Windows UI Automation: {uia_status}. "
+                f"Today: {today.isoformat()} | examples recognized: {', '.join(test_inputs[:3])}"
+            )
+            self.calendar_test_var.set(status)
+            self.add_log("Calendar TODAY self-test: " + status)
+        except Exception as exc:
+            log_error("run_calendar_today_test", exc)
+            self.calendar_test_var.set(f"FAIL — {exc}")
+
+
+    def show_diagnostics(self):
+        self.current_screen.set("Diagnostics")
+        self.clear_content()
+        f = self.scroll_frame(self.panel())
+        f.columnconfigure(1, weight=1)
+
+        ttk.Label(f, text="Diagnostics + Calibration", style="Panel.TLabel", font=("Segoe UI", 16, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", padx=18, pady=(14, 4))
+        self.help_text(
+            f,
+            "Run Pre-flight before important playback. Calendar TODAY Test checks current-date matching. Calibration offsets shift coordinate fallback clicks when display scaling creates a consistent offset.",
+            1, columnspan=2
+        )
+
+        preflight_btn = ttk.Button(f, text="Run Pre-flight Test", style="Accent.TButton", command=self.run_preflight)
+        preflight_btn.grid(row=2, column=0, sticky="ew", padx=18, pady=8)
+        self.tip(preflight_btn, "Check dependencies, hotkeys, target metadata, UI Automation availability, and display layout.")
+        ttk.Label(f, textvariable=self.preflight_var, style="Panel.TLabel", wraplength=700, justify="left").grid(row=2, column=1, sticky="w", padx=12, pady=8)
+
+        cal_test = ttk.Button(f, text="Run Calendar TODAY Test", command=self.run_calendar_today_test)
+        cal_test.grid(row=3, column=0, sticky="ew", padx=18, pady=8)
+        self.tip(cal_test, "Test today's date-label recognition and report Windows UI Automation availability.")
+        ttk.Label(f, textvariable=self.calendar_test_var, style="Panel.TLabel", wraplength=700, justify="left").grid(row=3, column=1, sticky="w", padx=12, pady=8)
+
+        ttk.Label(f, text="Calibration X", style="Panel.TLabel").grid(row=4, column=0, sticky="w", padx=18, pady=8)
+        cal_x = ttk.Spinbox(f, from_=-3000, to=3000, textvariable=self.cal_x_var, width=10, command=self.save_vars)
+        cal_x.grid(row=4, column=1, sticky="w", padx=12, pady=8)
+        self.tip(cal_x, "Pixels added to the mapped X coordinate during physical-coordinate fallback playback.")
+
+        ttk.Label(f, text="Calibration Y", style="Panel.TLabel").grid(row=5, column=0, sticky="w", padx=18, pady=8)
+        cal_y = ttk.Spinbox(f, from_=-3000, to=3000, textvariable=self.cal_y_var, width=10, command=self.save_vars)
+        cal_y.grid(row=5, column=1, sticky="w", padx=12, pady=8)
+        self.tip(cal_y, "Pixels added to the mapped Y coordinate during physical-coordinate fallback playback.")
+
+        debug = ttk.Checkbutton(f, text="Debug logging (includes mouse moves)", variable=self.debug_var, command=self.save_vars)
+        debug.grid(row=6, column=0, columnspan=2, sticky="w", padx=18, pady=8)
+        self.tip(debug, "Enable verbose logging only while troubleshooting; mouse-move logging can create large logs.")
+
+        ttk.Button(f, text="Open Error Log", command=self.show_error_log_window).grid(row=7, column=0, sticky="ew", padx=18, pady=8)
+        ttk.Button(f, text="Open Errors Folder", command=lambda: open_folder(ERRORS_DIR)).grid(row=7, column=1, sticky="ew", padx=18, pady=8)
+
+        info = active_window_info()
+        bounds = get_virtual_screen_bounds()
+        diagnostic_text = (
+            f"Current window: {info.get('process','')} | {info.get('title','')}\n"
+            f"HWND={info.get('hwnd')} PID={info.get('pid')} Rect={info.get('rect')}\n"
+            f"Virtual desktop: {bounds}\n"
+            f"Windows UI Automation: {'available' if Desktop is not None else 'not available'}"
+        )
+        ttk.Label(f, text=diagnostic_text, style="Panel.TLabel", justify="left", wraplength=850).grid(row=8, column=0, columnspan=2, sticky="w", padx=18, pady=12)
+
+    def show_settings(self):
+        self.current_screen.set("Settings")
+        self.clear_content()
+        f = self.scroll_frame(self.panel())
+        f.columnconfigure(1, weight=1)
+        ttk.Label(f, text="Settings", style="Panel.TLabel", font=("Segoe UI", 16, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", padx=18, pady=(14, 4))
+        self.help_text(f, "Customize appearance, countdown, timing behavior, and global hotkeys. Hotkeys must be unique.", 1, columnspan=2)
+        ttk.Label(f, text="Theme", style="Panel.TLabel").grid(row=2, column=0, sticky="w", padx=18, pady=7)
+        theme_box = ttk.Combobox(f, textvariable=self.theme_var, values=["dark", "light"], state="readonly", width=14)
+        theme_box.grid(row=2, column=1, sticky="w", padx=12, pady=7)
+        self.tip(theme_box, "Choose the professional dark or light color theme. Full theme refresh occurs on next app launch.")
+        ttk.Label(f, text="Countdown", style="Panel.TLabel").grid(row=3, column=0, sticky="w", padx=18, pady=7)
+        countdown_box = ttk.Spinbox(f, from_=0, to=30, textvariable=self.countdown_var, width=8, command=self.save_vars)
+        countdown_box.grid(row=3, column=1, sticky="w", padx=12, pady=7)
+        self.tip(countdown_box, "Seconds to count down before playback begins, giving you time to switch to the target window.")
+        ttk.Checkbutton(f, text="Human-like small timing variation", variable=self.human_like_var, command=self.save_vars).grid(row=4, column=0, columnspan=2, sticky="w", padx=18, pady=7)
+        ttk.Separator(f).grid(row=5, column=0, columnspan=2, sticky="ew", padx=18, pady=12)
+        ttk.Label(f, text="Hotkeys", style="Panel.TLabel", font=("Segoe UI", 13, "bold")).grid(row=6, column=0, columnspan=2, sticky="w", padx=18, pady=7)
+        choices = ["f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "esc"]
+        row = 7
+        for name, label in [("start", "Start"), ("stop", "Stop + Save"), ("pause", "Pause / Resume"), ("play", "Play"), ("emergency", "Emergency Stop")]:
+            ttk.Label(f, text=label, style="Panel.TLabel").grid(row=row, column=0, sticky="w", padx=18, pady=6)
+            hotkey_box = ttk.Combobox(f, textvariable=self.hotkey_vars[name], values=choices, state="readonly", width=10)
+            hotkey_box.grid(row=row, column=1, sticky="w", padx=12, pady=6)
+            self.tip(hotkey_box, f"Global hotkey assigned to {label}. Each action must use a unique key.")
+            row += 1
+        ttk.Button(f, text="Save Settings + Restart Hotkeys", command=self.save_and_restart_hotkeys).grid(row=row, column=0, sticky="ew", padx=18, pady=12)
+        ttk.Button(f, text="Open App Folder", command=lambda: open_folder(APP_DIR)).grid(row=row, column=1, sticky="ew", padx=18, pady=12)
+        row += 1
+        ttk.Label(f, text="Theme changes apply fully the next time the app opens.", style="Panel.TLabel").grid(row=row, column=0, columnspan=2, sticky="w", padx=18, pady=(0,12))
+
+    def show_error_log_window(self):
+        win = tk.Toplevel(self)
+        win.title("Rice2k Macro Studio - Error Log")
+        win.geometry("900x560")
+        text = tk.Text(win, bg=self.colors()["panel2"], fg=self.colors()["text"], font=("Consolas", 10), wrap="word")
+        text.pack(fill="both", expand=True, padx=10, pady=10)
+        try:
+            content = ERROR_LOG_FILE.read_text(encoding="utf-8") if ERROR_LOG_FILE.exists() else "No errors logged yet."
+        except Exception as exc:
+            content = str(exc)
+        text.insert("1.0", content[-100000:])
+        text.config(state="disabled")
+
+
+    def create_browser_helper(self):
+        try:
+            source = Path(resource_path("Browser_Element_Capture_Helper.html"))
+            if not source.exists():
+                raise FileNotFoundError("Browser_Element_Capture_Helper.html was not found in the app package.")
+            ensure_folders()
+            path = WEBSITE_ACTIONS_DIR / "browser_element_capture.html"
+            path.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+            messagebox.showinfo(
+                "Browser Helper",
+                f"Created:\n{path}\n\n"
+                "Open it in Edge/Chrome. Generate the bookmarklet, then use Mark Next = TODAY before clicking a calendar date "
+                "when you want that step to always choose the current date."
+            )
