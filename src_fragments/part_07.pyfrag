@@ -1,0 +1,174 @@
+        sidebar.grid_propagate(False)
+        ttk.Label(sidebar, text="Rice2k\nMacro Studio", style="Panel.TLabel", font=("Segoe UI", 15, "bold")).pack(anchor="w", padx=14, pady=(18, 14))
+        for label, cmd in [
+            ("Dashboard", self.show_dashboard),
+            ("Recordings", self.show_recordings),
+            ("Smart Actions", self.show_smart_actions),
+            ("Exports", self.show_exports),
+            ("Automation", self.show_automation),
+            ("Calendar Guide", self.show_calendar_guide),
+            ("Diagnostics", self.show_diagnostics),
+            ("Settings", self.show_settings),
+            ("Help & Guide", self.show_help),
+        ]:
+            ttk.Button(sidebar, text=label, style="Sidebar.TButton", command=cmd).pack(fill="x", padx=10, pady=4)
+        ttk.Label(sidebar, text=f"v{APP_VERSION}", style="Panel.TLabel").pack(side="bottom", anchor="w", padx=14, pady=12)
+
+        main = ttk.Frame(self)
+        main.grid(row=0, column=1, sticky="nsew")
+        main.columnconfigure(0, weight=1)
+        main.rowconfigure(2, weight=1)
+        header = ttk.Frame(main)
+        header.grid(row=0, column=0, sticky="ew", padx=22, pady=(16, 4))
+        ttk.Label(header, textvariable=self.current_screen, style="Header.TLabel").pack(anchor="w")
+        ttk.Label(header, text="Professional automation recorder with click, keyboard, scroll, export, diagnostics, and safety controls.", style="Sub.TLabel").pack(anchor="w", pady=(3, 0))
+
+        status = ttk.Frame(main, style="Panel.TFrame")
+        status.grid(row=1, column=0, sticky="ew", padx=22, pady=10)
+        status.columnconfigure(1, weight=1)
+        ttk.Label(status, text="Status", style="Panel.TLabel").grid(row=0, column=0, padx=12, pady=9, sticky="w")
+        ttk.Label(status, textvariable=self.status_var, style="Status.TLabel").grid(row=0, column=1, padx=8, pady=9, sticky="w")
+        ttk.Label(status, textvariable=self.loaded_file_var, style="Panel.TLabel").grid(row=0, column=2, padx=12, pady=9, sticky="e")
+
+        self.content = ttk.Frame(main)
+        self.content.grid(row=2, column=0, sticky="nsew", padx=22, pady=(0, 18))
+        self.content.columnconfigure(0, weight=1)
+        self.content.rowconfigure(0, weight=1)
+        self.show_dashboard()
+
+    def clear_content(self):
+        for w in self.content.winfo_children():
+            w.destroy()
+
+    def panel(self):
+        p = ttk.Frame(self.content, style="Panel.TFrame")
+        p.grid(row=0, column=0, sticky="nsew")
+        p.columnconfigure(0, weight=1)
+        p.rowconfigure(0, weight=1)
+        return p
+
+    def scroll_frame(self, parent):
+        c = self.colors()
+        canvas = tk.Canvas(parent, bg=c["panel"], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        frame = ttk.Frame(canvas, style="Panel.TFrame")
+        window_id = canvas.create_window((0, 0), window=frame, anchor="nw")
+        frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(window_id, width=e.width))
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(0, weight=1)
+        return frame
+
+
+    def help_text(self, parent, text, row, column=0, columnspan=2, wrap=860):
+        """Add muted explanatory text without crowding controls."""
+        label = ttk.Label(parent, text=text, style="Help.TLabel", wraplength=wrap, justify="left")
+        label.grid(row=row, column=column, columnspan=columnspan, sticky="w", padx=18, pady=(0, 8))
+        return label
+
+    def tip(self, widget, text):
+        attach_tooltip(widget, text)
+        return widget
+
+
+    def on_speed_change(self, _value=None):
+        """Update the visible speed immediately without rewriting settings on every slider pixel."""
+        try:
+            text = f"{float(self.speed_var.get()):.1f}x"
+        except Exception:
+            text = "1.0x"
+        for name in ("speed_label", "speed_display"):
+            widget = getattr(self, name, None)
+            try:
+                if widget is not None and widget.winfo_exists():
+                    widget.config(text=text)
+            except Exception:
+                pass
+
+    def show_dashboard(self):
+        self.current_screen.set("Dashboard")
+        self.clear_content()
+        frame = self.scroll_frame(self.panel())
+        frame.columnconfigure((0, 1, 2), weight=1)
+
+        ttk.Label(frame, text="Recording Dashboard", style="Panel.TLabel", font=("Segoe UI", 17, "bold")).grid(row=0, column=0, columnspan=3, sticky="w", padx=18, pady=(18, 4))
+        self.help_text(
+            frame,
+            "Start here. Click-Only Fast is the recommended mode for most work: it records clicks, scroll, and optional keyboard without storing every tiny mouse movement.",
+            1, columnspan=3
+        )
+
+        controls = ttk.LabelFrame(frame, text="Main Controls")
+        controls.grid(row=2, column=0, columnspan=3, sticky="ew", padx=18, pady=8)
+        controls.columnconfigure((0, 1, 2, 3, 4), weight=1)
+
+        b_start = ttk.Button(controls, text="Start\n" + self.hotkey_vars["start"].get().upper(), style="Primary.TButton", command=self.start_recording)
+        b_start.grid(row=0, column=0, sticky="nsew", padx=5, pady=10)
+        self.tip(b_start, "Begin a new recording using the currently enabled mouse, keyboard, scroll, and movement options.")
+
+        b_stop = ttk.Button(controls, text="Stop + Save\n" + self.hotkey_vars["stop"].get().upper(), style="Accent.TButton", command=self.stop_recording)
+        b_stop.grid(row=0, column=1, sticky="nsew", padx=5, pady=10)
+        self.tip(b_stop, "Stop recording and automatically save it as a JSON recording in the Recordings folder.")
+
+        b_pause = ttk.Button(controls, text="Pause / Resume\n" + self.hotkey_vars["pause"].get().upper(), command=self.pause_resume)
+        b_pause.grid(row=0, column=2, sticky="nsew", padx=5, pady=10)
+        self.tip(b_pause, "Temporarily pause recording or playback without ending the current session.")
+
+        b_play = ttk.Button(controls, text="Play\n" + self.hotkey_vars["play"].get().upper(), style="Primary.TButton", command=self.confirm_playback)
+        b_play.grid(row=0, column=3, sticky="nsew", padx=5, pady=10)
+        self.tip(b_play, "Run a pre-flight check, show playback details, then replay the loaded or just-recorded actions.")
+
+        b_emergency = ttk.Button(controls, text="Emergency Stop\n" + self.hotkey_vars["emergency"].get().upper(), style="Danger.TButton", command=self.emergency_stop)
+        b_emergency.grid(row=0, column=4, sticky="nsew", padx=5, pady=10)
+        self.tip(b_emergency, "Immediately request playback to stop and release any held mouse buttons or keyboard keys.")
+
+        stats = ttk.Frame(frame, style="Panel.TFrame")
+        stats.grid(row=3, column=0, columnspan=3, sticky="ew", padx=18, pady=8)
+        stats.columnconfigure((0, 1, 2), weight=1)
+        for col, title, var, hint in [
+            (0, "Recorded Actions", self.action_count_var, "Counts clicks, scroll, keys, and any movement events currently in memory."),
+            (1, "Elapsed", self.elapsed_var, "Elapsed time for the current recording."),
+            (2, "Playback", self.playback_var, "Current playback run/status.")
+        ]:
+            card = ttk.LabelFrame(stats, text=title)
+            card.grid(row=0, column=col, sticky="nsew", padx=5)
+            label = ttk.Label(card, textvariable=var, style="Status.TLabel")
+            label.pack(anchor="w", padx=12, pady=12)
+            self.tip(label, hint)
+
+        options = ttk.LabelFrame(frame, text="What to Record")
+        options.grid(row=4, column=0, columnspan=3, sticky="ew", padx=18, pady=8)
+        options.columnconfigure((0, 1, 2), weight=1)
+
+        widgets = []
+        widgets.append((ttk.Checkbutton(options, text="Mouse clicks", variable=self.record_mouse_var, command=self.save_vars),
+                        "Records mouse button presses/releases and click positions."))
+        widgets.append((ttk.Checkbutton(options, text="Keyboard", variable=self.record_keyboard_var, command=self.save_vars),
+                        "Records keyboard press/release events. Avoid typing passwords or private information while enabled."))
+        widgets.append((ttk.Checkbutton(options, text="Scroll wheel", variable=self.record_scroll_var, command=self.save_vars),
+                        "Records vertical and horizontal mouse-wheel scrolling. This works independently of the Mouse clicks checkbox."))
+        widgets.append((ttk.Checkbutton(options, text="Mouse movement path", variable=self.record_mouse_moves_var, command=self.save_vars),
+                        "Records cursor movement points. This creates much larger recordings and is normally unnecessary."))
+        widgets.append((ttk.Checkbutton(options, text="Skip movement on playback", variable=self.skip_moves_var, command=self.save_vars),
+                        "Ignores recorded move events during playback for faster, smoother click-focused automation."))
+        widgets.append((ttk.Checkbutton(options, text="Mouse-only safe mode", variable=self.mouse_safe_var, command=self.save_vars),
+                        "Keeps recorded keyboard actions in the file but does not replay them."))
+
+        for i, (w, hint) in enumerate(widgets):
+            r, c = divmod(i, 3)
+            w.grid(row=r, column=c, sticky="w", padx=12, pady=7)
+            self.tip(w, hint)
+
+        ttk.Label(options, text="Recommended: Mouse clicks ON • Scroll ON • Movement OFF • Skip movement ON", style="Success.TLabel").grid(row=2, column=0, columnspan=3, sticky="w", padx=12, pady=(5, 10))
+
+        settings = ttk.LabelFrame(frame, text="Playback")
+        settings.grid(row=5, column=0, columnspan=3, sticky="ew", padx=18, pady=8)
+        settings.columnconfigure(1, weight=1)
+
+        ttk.Label(settings, text="Speed", style="Panel.TLabel").grid(row=0, column=0, sticky="w", padx=12, pady=8)
+        speed = ttk.Scale(settings, from_=0.5, to=100, variable=self.speed_var, command=self.on_speed_change)
+        speed.grid(row=0, column=1, sticky="ew", padx=12)
+        speed.bind("<ButtonRelease-1>", lambda _e: self.save_vars(), add="+")
