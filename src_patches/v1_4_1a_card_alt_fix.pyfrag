@@ -1,0 +1,5 @@
+# Rice2k Macro Studio v1.4.1 theme compatibility fix.
+# v1.3's mockup style layer expects card_alt in every active theme.
+THEMES["dark"]["card_alt"] = "#0D2034"
+THEMES["light"]["card_alt"] = "#EAF1F7"
+THEMES["neo_green"]["card_alt"] = "#0C2219"
