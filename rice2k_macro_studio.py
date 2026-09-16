@@ -1,28 +1,50 @@
 """
-Rice2k Macro Studio v1.0 source loader.
+Rice2k Macro Studio v1.1 source loader.
 
-The application source is stored in ordered UTF-8 fragments under src_fragments/.
-The fragments are concatenated exactly and executed as one source module. This keeps
-GitHub uploads manageable while preserving the validated application source byte-for-byte.
+The validated v1.0 application source remains in ordered fragments under src_fragments/.
+Version patches under src_patches/ are inserted immediately before main() is invoked.
+This keeps GitHub updates manageable while preserving a compile-validated source layout.
 """
 from pathlib import Path
 import sys
 
 
-def _source_fragment_dir():
-    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-    return base / "src_fragments"
+EXPECTED_FRAGMENT_COUNT = 14
+
+
+def _base_dir():
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 
 
 def _run_application_source():
-    parts_dir = _source_fragment_dir()
+    base = _base_dir()
+    parts_dir = base / "src_fragments"
+    patches_dir = base / "src_patches"
+
     parts = sorted(parts_dir.glob("part_*.pyfrag"))
-    if not parts:
+    if len(parts) != EXPECTED_FRAGMENT_COUNT:
         raise FileNotFoundError(
-            f"Rice2k Macro Studio source fragments were not found in: {parts_dir}"
+            f"Rice2k Macro Studio expected {EXPECTED_FRAGMENT_COUNT} source fragments in "
+            f"{parts_dir}, but found {len(parts)}."
         )
+
     source = "".join(p.read_text(encoding="utf-8") for p in parts)
-    exec(compile(source, str(parts_dir / "rice2k_macro_studio_full.py"), "exec"), globals(), globals())
+    marker = '\nif __name__ == "__main__":\n    main()'
+    if marker not in source:
+        raise RuntimeError("Rice2k Macro Studio main() marker was not found in reconstructed source.")
+
+    patches = []
+    if patches_dir.exists():
+        patches = sorted(patches_dir.glob("*.pyfrag"))
+    if patches:
+        patch_text = "\n\n".join(p.read_text(encoding="utf-8") for p in patches)
+        source = source.replace(marker, "\n\n" + patch_text + "\n\n" + marker, 1)
+
+    exec(
+        compile(source, str(parts_dir / "rice2k_macro_studio_full.py"), "exec"),
+        globals(),
+        globals(),
+    )
 
 
 _run_application_source()
