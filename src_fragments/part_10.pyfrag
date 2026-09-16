@@ -1,0 +1,197 @@
+            def apply_delay():
+                try:
+                    new_delay = max(0.0, float(value.get()))
+                    with self.engine.action_lock:
+                        if 0 <= i < len(self.engine.actions):
+                            self.engine.actions[i]["time_since_last"] = new_delay
+                    dialog.destroy()
+                    refresh()
+                except Exception:
+                    messagebox.showerror("Invalid Delay", "Enter a non-negative number of seconds.", parent=dialog)
+
+            ttk.Button(dialog, text="Apply", style="Accent.TButton", command=apply_delay).grid(row=2, column=0, padx=12, pady=(6, 12))
+
+        buttons = ttk.Frame(win)
+        buttons.grid(row=3, column=0, columnspan=2, sticky="ew", padx=14, pady=(0, 12))
+        ttk.Button(buttons, text="Delete Selected", style="Danger.TButton", command=delete_selected).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Edit Delay", command=edit_delay).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Save Edited Copy", style="Accent.TButton", command=self.save_semantic_copy).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Refresh", command=refresh).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Close", command=win.destroy).pack(side="right", padx=4)
+
+        refresh()
+
+    def export_smart_actions(self):
+        smart = build_smart_actions(self.engine.snapshot_actions())
+        if not smart:
+            messagebox.showwarning("No Actions", "Load or record something first.")
+            return
+        path = EXPORTS_DIR / f"smart_actions_{now_stamp()}.txt"
+        lines = []
+        for a in smart:
+            lines.append(json.dumps(a, ensure_ascii=False))
+        path.write_text("\n".join(lines), encoding="utf-8")
+        messagebox.showinfo("Exported", str(path))
+
+
+    def export_selected_recording(self):
+        if self.load_selected():
+            self.show_exports()
+
+    def show_exports(self):
+        self.current_screen.set("Exports")
+        self.clear_content()
+        f = self.scroll_frame(self.panel())
+        f.columnconfigure((0, 1), weight=1)
+
+        ttk.Label(f, text="Export Recording", style="Panel.TLabel", font=("Segoe UI", 16, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", padx=18, pady=(14, 4))
+        self.help_text(
+            f,
+            "Exports never modify the original recording. Choose a format depending on whether you want backup, readability, spreadsheet analysis, or editable automation code.",
+            1, columnspan=2
+        )
+
+        formats = [
+            ("json", "Raw JSON", "Best for backup/import. Preserves every recorded action and metadata."),
+            ("txt", "Readable TXT", "Human-readable action list for troubleshooting and documentation."),
+            ("csv", "Raw CSV", "Spreadsheet-friendly raw action data for Excel or analysis."),
+            ("python", "Python Script", "Readable PyAutoGUI-style playback script for manual customization."),
+            ("smart_json", "Smart Actions JSON", "Cleaned clicks, text blocks, scroll actions, and special keys."),
+            ("smart_csv", "Smart Actions CSV", "Cleaned Smart Actions in spreadsheet-friendly form."),
+        ]
+
+        row = 2
+        for fmt, title, desc in formats:
+            box = ttk.LabelFrame(f, text=title)
+            box.grid(row=row, column=0, columnspan=2, sticky="ew", padx=18, pady=6)
+            box.columnconfigure(0, weight=1)
+            ttk.Label(box, text=desc, style="Help.TLabel", wraplength=700, justify="left").grid(row=0, column=0, sticky="w", padx=12, pady=9)
+            b = ttk.Button(box, text=f"Export {title}", style="Accent.TButton", command=lambda x=fmt: self.export_current(x))
+            b.grid(row=0, column=1, sticky="e", padx=12, pady=9)
+            self.tip(b, desc)
+            row += 1
+
+        b_open = ttk.Button(f, text="Open Exports Folder", command=lambda: open_folder(EXPORTS_DIR))
+        b_open.grid(row=row, column=0, sticky="ew", padx=18, pady=12)
+        self.tip(b_open, "Open Documents\\Rice2k Macro Studio\\Exports in File Explorer.")
+        b_load = ttk.Button(f, text="Load Another Recording", command=self.choose_recording)
+        b_load.grid(row=row, column=1, sticky="ew", padx=18, pady=12)
+        self.tip(b_load, "Choose another recording to export.")
+
+    def _export_path(self, stem, suffix):
+        ensure_folders()
+        return EXPORTS_DIR / f"{stem}_{now_stamp()}{suffix}"
+
+    def _flatten_action_for_csv(self, action):
+        flat = {}
+        for key, value in action.items():
+            if isinstance(value, (dict, list, tuple)):
+                flat[key] = json.dumps(value, ensure_ascii=False)
+            else:
+                flat[key] = value
+        return flat
+
+    def export_current(self, export_format):
+        actions = self.engine.snapshot_actions()
+        if not actions:
+            messagebox.showwarning("No Recording Loaded", "Record something or load a saved recording first.")
+            return
+        try:
+            smart = build_smart_actions(actions)
+            browser_smart = self.browser_smart_actions() if hasattr(self, "browser_smart_actions") else []
+            combined_smart = smart + browser_smart
+            if export_format == "json":
+                path = self._export_path("recording", ".json")
+                payload = {
+                    "app": APP_NAME, "version": APP_VERSION,
+                    "exported": datetime.datetime.now().isoformat(),
+                    "source": self.engine.current_file,
+                    "actions": actions,
+                    "smart_actions": smart,
+                    "browser_capture_actions": list(self.browser_capture_actions),
+                }
+                path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+            elif export_format == "txt":
+                path = self._export_path("recording_readable", ".txt")
+                lines = [
+                    f"{APP_NAME} {APP_VERSION}",
+                    f"Exported: {datetime.datetime.now().isoformat()}",
+                    f"Source: {self.engine.current_file or 'current unsaved memory'}",
+                    f"Raw actions: {len(actions)}",
+                    f"Smart actions: {len(smart)}",
+                    "",
+                ]
+                for i, a in enumerate(actions):
+                    lines.append(
+                        f"{i:05d} | {a.get('type','')} | t={a.get('time_from_start',0)} | "
+                        f"window={a.get('window_title','')} | process={a.get('process_name','')} | "
+                        f"target={a.get('control_type','')}:{a.get('control_name','')} | automation_id={a.get('automation_id','')} | "
+                        f"dynamic={a.get('dynamic_rule','')} | x={a.get('x','')} y={a.get('y','')} | "
+                        f"key={a.get('key','')} | scroll=({a.get('dx','')},{a.get('dy','')})"
+                    )
+                path.write_text("\n".join(lines), encoding="utf-8")
+
+            elif export_format == "csv":
+                path = self._export_path("recording_raw", ".csv")
+                rows = [self._flatten_action_for_csv(a) for a in actions]
+                fields = sorted({k for row in rows for k in row.keys()})
+                with path.open("w", newline="", encoding="utf-8-sig") as f:
+                    writer = csv.DictWriter(f, fieldnames=fields)
+                    writer.writeheader()
+                    writer.writerows(rows)
+
+            elif export_format == "smart_json":
+                path = self._export_path("smart_actions", ".json")
+                path.write_text(json.dumps(combined_smart, indent=2, ensure_ascii=False), encoding="utf-8")
+
+            elif export_format == "smart_csv":
+                path = self._export_path("smart_actions", ".csv")
+                rows = [self._flatten_action_for_csv(a) for a in combined_smart]
+                fields = sorted({k for row in rows for k in row.keys()})
+                with path.open("w", newline="", encoding="utf-8-sig") as f:
+                    writer = csv.DictWriter(f, fieldnames=fields)
+                    writer.writeheader()
+                    writer.writerows(rows)
+
+            elif export_format == "python":
+                path = self._export_path("playback", ".py")
+                payload = repr(actions)
+                script = (
+                    '"""Exported by Rice2k Macro Studio. Review before running."""\n'
+                    'import time\nimport pyautogui\n\n'
+                    f'ACTIONS = {payload}\n'
+                    'SPEED = 1.0\n\n'
+                    'for a in ACTIONS:\n'
+                    '    time.sleep(max(0, float(a.get("time_since_last", 0))) / SPEED)\n'
+                    '    t = a.get("type")\n'
+                    '    if t == "move":\n'
+                    '        pyautogui.moveTo(a.get("x",0), a.get("y",0), duration=0)\n'
+                    '    elif t == "click":\n'
+                    '        pyautogui.moveTo(a.get("x",0), a.get("y",0), duration=0)\n'
+                    '        fn = pyautogui.mouseDown if a.get("pressed") else pyautogui.mouseUp\n'
+                    '        fn(button=a.get("button","left"))\n'
+                    '    elif t == "scroll":\n'
+                    '        pyautogui.moveTo(a.get("x",0), a.get("y",0), duration=0)\n'
+                    '        pyautogui.scroll(int(a.get("dy",0)))\n'
+                    '    elif t == "key":\n'
+                    '        key = a.get("key","")\n'
+                    '        if key:\n'
+                    '            fn = pyautogui.keyDown if a.get("pressed") else pyautogui.keyUp\n'
+                    '            fn(key.lower() if len(key)==1 else key)\n'
+                )
+                path.write_text(script, encoding="utf-8")
+            else:
+                raise ValueError(f"Unknown export format: {export_format}")
+
+            self.add_log(f"Exported {export_format}: {path}")
+            messagebox.showinfo("Export Complete", f"Saved:\n{path}")
+        except Exception as exc:
+            log_error("export_current", exc, extra=f"format={export_format}")
+            messagebox.showerror("Export Error", f"{exc}\n\nDetails were written to the error log.")
+
+    def show_automation(self):
+        self.current_screen.set("Automation")
+        self.clear_content()
+        f = self.scroll_frame(self.panel())
+        f.columnconfigure(1, weight=1)
