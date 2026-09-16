@@ -1,0 +1,304 @@
+            write_uncaught(
+                "uncaught worker-thread exception",
+                args.exc_type, args.exc_value, args.exc_traceback,
+                f"thread={thread_name}"
+            )
+        threading.excepthook = thread_handler
+
+    try:
+        import faulthandler
+        try:
+            ERRORS_DIR.mkdir(parents=True, exist_ok=True)
+            fault_path = ERRORS_DIR / "faulthandler.log"
+        except Exception:
+            FALLBACK_LOG_DIR.mkdir(parents=True, exist_ok=True)
+            fault_path = FALLBACK_LOG_DIR / "faulthandler.log"
+        fault_file = fault_path.open("a", encoding="utf-8")
+        faulthandler.enable(file=fault_file, all_threads=True)
+        install_global_error_logger._fault_file = fault_file
+    except Exception:
+        pass
+
+
+def enable_dpi_awareness():
+    if not sys.platform.startswith("win"):
+        return
+    try:
+        import ctypes
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except Exception:
+            ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+
+def resource_path(name):
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return str(base / name)
+
+
+def open_folder(path):
+    try:
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        if sys.platform.startswith("win"):
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.Popen(["open", str(path)])
+        else:
+            import subprocess
+            subprocess.Popen(["xdg-open", str(path)])
+    except Exception as exc:
+        log_error("open_folder", exc, str(path))
+        messagebox.showerror("Open Folder Error", f"{exc}\n\nDetails saved to the error log.")
+
+
+def get_virtual_screen_bounds():
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            return {
+                "left": int(user32.GetSystemMetrics(76)),
+                "top": int(user32.GetSystemMetrics(77)),
+                "width": int(user32.GetSystemMetrics(78)),
+                "height": int(user32.GetSystemMetrics(79)),
+            }
+        except Exception:
+            pass
+    if pyautogui:
+        size = pyautogui.size()
+        return {"left": 0, "top": 0, "width": int(size.width), "height": int(size.height)}
+    return {"left": 0, "top": 0, "width": 1920, "height": 1080}
+
+
+def active_window_info():
+    info = {"title": "Unknown Window", "hwnd": 0, "pid": 0, "process": "", "rect": None}
+    if not sys.platform.startswith("win"):
+        return info
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        hwnd = user32.GetForegroundWindow()
+        info["hwnd"] = int(hwnd)
+        length = user32.GetWindowTextLengthW(hwnd)
+        buff = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(hwnd, buff, length + 1)
+        info["title"] = buff.value or "Unknown Window"
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        info["pid"] = int(pid.value)
+        if psutil and pid.value:
+            try:
+                info["process"] = psutil.Process(pid.value).name()
+            except Exception:
+                pass
+        rect = wintypes.RECT()
+        if user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+            info["rect"] = [int(rect.left), int(rect.top), int(rect.right), int(rect.bottom)]
+    except Exception:
+        pass
+    return info
+
+
+
+
+def monitor_info_for_point(x, y):
+    info = {"name": "", "bounds": None}
+    if get_monitors:
+        try:
+            for idx, m in enumerate(get_monitors()):
+                if m.x <= x < m.x + m.width and m.y <= y < m.y + m.height:
+                    return {"name": getattr(m, "name", "") or f"Monitor {idx+1}", "bounds": [int(m.x), int(m.y), int(m.width), int(m.height)]}
+        except Exception:
+            pass
+    return info
+
+def dpi_for_window(hwnd):
+    if not sys.platform.startswith("win") or not hwnd:
+        return 96
+    try:
+        import ctypes
+        if hasattr(ctypes.windll.user32, "GetDpiForWindow"):
+            return int(ctypes.windll.user32.GetDpiForWindow(hwnd))
+    except Exception:
+        pass
+    return 96
+
+def key_name(key_obj):
+    try:
+        if key_obj.char is not None:
+            return key_obj.char, "char"
+    except AttributeError:
+        pass
+    return str(key_obj).replace("Key.", ""), "special"
+
+
+
+
+def uia_element_at_point(x, y):
+    """Best-effort Windows UI Automation metadata for the element under a click."""
+    result = {
+        "control_name": "", "control_type": "", "automation_id": "",
+        "control_class": "", "framework_id": "", "uia_supported": False
+    }
+    if Desktop is None or not sys.platform.startswith("win"):
+        return result
+    try:
+        wrapper = Desktop(backend="uia").from_point(int(x), int(y))
+        info = getattr(wrapper, "element_info", None)
+        if info:
+            result.update({
+                "control_name": getattr(info, "name", "") or "",
+                "control_type": getattr(info, "control_type", "") or "",
+                "automation_id": getattr(info, "automation_id", "") or "",
+                "control_class": getattr(info, "class_name", "") or "",
+                "framework_id": getattr(info, "framework_id", "") or "",
+                "uia_supported": True,
+            })
+    except Exception:
+        pass
+    return result
+
+
+def today_label_variants(date_obj=None, include_generic=False):
+    """Common accessible-label representations for the current date."""
+    d = date_obj or datetime.date.today()
+    variants = {
+        d.isoformat(),
+        d.strftime("%m/%d/%Y"),
+        f"{d.month}/{d.day}/{d.year}",
+        d.strftime("%B %d, %Y"),
+        f"{d.strftime('%B')} {d.day}, {d.year}",
+        d.strftime("%b %d, %Y"),
+        f"{d.strftime('%b')} {d.day}, {d.year}",
+        d.strftime("%A, %B %d, %Y"),
+        f"{d.strftime('%A')}, {d.strftime('%B')} {d.day}, {d.year}",
+        d.strftime("%A %B %d %Y"),
+        f"{d.strftime('%A')} {d.strftime('%B')} {d.day} {d.year}",
+    }
+    if include_generic:
+        variants.update({"today", "current date", "go to today"})
+    return {v.strip().lower() for v in variants if v}
+
+
+def _normalize_date_label(text):
+    text = str(text or "").strip().lower()
+    text = re.sub(r"[,./\-]+", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def looks_like_today_label(text, date_obj=None, include_generic=False):
+    """Conservative matching for accessible date names such as 'Wednesday, September 16, 2026'."""
+    if not text:
+        return False
+    normalized = _normalize_date_label(text)
+    for variant in today_label_variants(date_obj, include_generic=include_generic):
+        nv = _normalize_date_label(variant)
+        if nv and (normalized == nv or nv in normalized):
+            return True
+    return False
+
+
+def _uia_window_score(wrapper, action):
+    """Score a top-level UIA window against recorded process/title metadata."""
+    try:
+        info = getattr(wrapper, "element_info", None)
+        if not info:
+            return 0
+        score = 0
+        recorded_title = (action.get("window_title") or "").strip().lower()
+        current_title = (getattr(info, "name", "") or "").strip().lower()
+        if recorded_title and current_title:
+            if recorded_title == current_title:
+                score += 8
+            elif recorded_title in current_title or current_title in recorded_title:
+                score += 4
+
+        recorded_process = (action.get("process_name") or "").strip().lower()
+        pid = int(getattr(info, "process_id", 0) or 0)
+        if recorded_process and pid and psutil:
+            try:
+                if psutil.Process(pid).name().lower() == recorded_process:
+                    score += 10
+            except Exception:
+                pass
+        return score
+    except Exception:
+        return 0
+
+
+def resolve_uia_root(action):
+    """Resolve the current target window even if the recorded HWND changed after the app reopened."""
+    if Desktop is None or not sys.platform.startswith("win"):
+        return None
+
+    recorded_hwnd = int(action.get("hwnd", 0) or 0)
+    desktop = Desktop(backend="uia")
+
+    # First try the original HWND if it still exists.
+    if recorded_hwnd:
+        try:
+            root = desktop.window(handle=recorded_hwnd)
+            if root.exists(timeout=0.15):
+                return root
+        except Exception:
+            pass
+
+    # Then try the current foreground window when it matches the recorded app/window.
+    try:
+        current = active_window_info()
+        current_action = dict(action)
+        if current.get("hwnd") and (
+            ((action.get("process_name") or "").lower() and (action.get("process_name") or "").lower() == (current.get("process") or "").lower())
+            or
+            ((action.get("window_title") or "").strip().lower() and (action.get("window_title") or "").strip().lower() == (current.get("title") or "").strip().lower())
+        ):
+            root = desktop.window(handle=int(current["hwnd"]))
+            if root.exists(timeout=0.15):
+                return root
+    except Exception:
+        pass
+
+    # Finally search current top-level UIA windows by process/title.
+    try:
+        ranked = []
+        for wrapper in desktop.windows():
+            score = _uia_window_score(wrapper, action)
+            if score:
+                ranked.append((score, wrapper))
+        if ranked:
+            ranked.sort(key=lambda item: item[0], reverse=True)
+            return ranked[0][1]
+    except Exception:
+        pass
+
+    return None
+
+
+def _today_candidate_score(info, action, date_obj=None):
+    """Score a UIA descendant as today's calendar target."""
+    d = date_obj or datetime.date.today()
+    name = getattr(info, "name", "") or ""
+    ctype = getattr(info, "control_type", "") or ""
+    cls = getattr(info, "class_name", "") or ""
+    score = 0
+
+    if looks_like_today_label(name, d, include_generic=True):
+        score += 30
+
+    recorded_type = action.get("control_type", "") or ""
+    recorded_class = action.get("control_class", "") or ""
+    if recorded_type and ctype == recorded_type:
+        score += 4
+    if recorded_class and cls == recorded_class:
+        score += 2
+
+    return score
+
+
+def uia_invoke_action(action):
