@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.4.1 — Compact Cleanup
+
+**Status:** Current release  
+**Focus:** Theme reliability, compact Dashboard, uniform sidebar icons, cleaner option controls, and reduced stretching.
+
+### Themes
+- Added **Neo Green** — deep green/black surfaces with neon-green accents.
+- Reworked **Light** into a softer blue/gray theme instead of harsh white.
+- Kept explicit hover/focus/pressed/disabled/readonly/selected colors so Windows does not fall back to bright white interaction states.
+
+### Layout
+- Tightened Dashboard spacing and reduced oversized cards/gaps.
+- Normalized sidebar icons to a compact size.
+- Added compact checkbox/radio styles.
+- Reduced wasted space at the top of the Recordings page.
+- Centered Recordings, Web Capture, Calendar, and Settings content so large boxes do not stretch across the entire window.
+- Grouped website recording filters into tighter columns closer to their labels.
+
+### Reliability
+- Fixed the v1.3 visual override layer so all three themes contain the card/border colors used by the mockup UI.
+- Preserved mouse-wheel scrolling and auto-hiding vertical scrollbars.
+- Preserved all website filters, Smart Targets, Calendar TODAY, exports, diagnostics, launcher logging, and error logging.
+
+### Validation
+- 36 validation checks passed with 0 failures.
+- GUI smoke-tested Dashboard, Recordings, Web Capture, Calendar, Settings, Diagnostics, Export, Smart Targets, and Help in **Dark**, **Neo Green**, and **Light**.
+- Browser helper and generated bookmarklet JavaScript syntax re-tested.
+- Error/startup log output re-tested.
+
 ## v1.3 — Mockup-Matched UI
 
 ### UI
@@ -11,21 +40,14 @@
 - Added status chips, larger action controls, and larger stat cards.
 - Added Quick Actions, Tips, and Hotkeys cards.
 - Added persistent footer with status, loaded file, data directory, and live time.
-- Increased typography to better match the design reference.
 
 ### Interaction
 - Explicit dark-theme hover/focus/pressed/disabled/readonly/selected states.
-- Removed dependency on system-white control highlight behavior.
 - Added application-level mouse-wheel support for scrollable pages.
 - Added auto-hiding vertical scrollbar behavior.
 
-### Packaging
-- Updated launcher and build version labeling.
-- Added v1.3 UI documentation.
-- Navigation icons include embedded fallbacks so GitHub/source installs do not require extra image files.
-
 ### Feature compatibility
-All v1.2 automation features are retained.
+All v1.2 automation features were retained.
 
 ## v1.2 — Compact UI Redesign
 
