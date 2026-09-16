@@ -1,1 +1,0 @@
-The approved Rice2k Macro Studio mouse-and-gear icon is packaged with v1.2 and used as the runtime application icon. Repository branding is referenced from `rice2k_macro_studio.png`.
