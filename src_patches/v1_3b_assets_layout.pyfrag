@@ -1,0 +1,181 @@
+def _v13_load_ui_images(self):
+    self._ui_images = {}
+    base = Path(resource_path("assets/ui"))
+    embedded_icons = {'dashboard': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAjElEQVR4nO2UwQ2AMAwDW8RMjMRQHalLhRcSQm1x4kh8fG8SGydNKUIIktbNmPotQ5wxETbwFo2aqKzwiPOocF9XAuhfetKADXgjRr+HDETni9QtZ8U+sSezvZgmkCm+6jc0kC1O923dLLKESA11CTOQgT1aOJqv5wTf/J6ADMgAtLXMaf56Gb8nIMQF4sVQbnOgzSoAAAAASUVORK5CYII=', 'recordings': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAaklEQVR4nO2W2wkAIAwDqziTIzmUI7mUDuCjSAtRyP2qNKT3oQghYMLuoLbevYeVHKZ50XvILUm7sEp9y6lNeAPwAOoKRGxCaiv8owEPEXfAG4AHoISUEB6AElJCeID3JbR+TrX38BUQMgAd9yDcn6NMgAAAAABJRU5ErkJggg==', 'web': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA1UlEQVR4nO2WQQ6FIAxE7Y9n4kgcyiN5KVyZEKRlptgY852dAZyXoTRdlk//LvEc2vZStLWchPontdky9oJAm3rGp8G51n6jIL8Z855yEqnXR6mZAKy5ts+CUAHqQ2xhMRDDK8hJpL1nLwQMMGNoQfRSgIvwLpghQJShlsIwgWg9DnCJmWm3XtXX+3gCq7ag9fpWTNG6nmG0LgBW05iRlhTUiiOATIC7Ta06gVrxDJB7HmCGCsRceyVmAr1DKAw6T8BFiEJseynMMPOOqZgBiZobPoXpAOwFmC9xmAO1AAAAAElFTkSuQmCC', 'smart': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAi0lEQVR4nO1W2wnAMAhMSmfqSB0qI2Up8xXIR8BnMVLvT8LpIZ6mlER0tA7QOoCUf1mKSQEhBVQpcTd471PZ+dgEysRzhLAErMV3RbB3FTh+1+4Gk4RUjrsLUGjaSeG6d+BeA9PBQfJOl5zVAczbUqh3wr9tOPHVJnS/BbGuISbE/AJSheSvOAUkNBiuIn1X1mL3OQAAAABJRU5ErkJggg==', 'calendar': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAgklEQVR4nO2VwQ3AIAhFtelMbtQOZTdyKXoyaVFMCTZ4+O+oJH4eJIYAwEdyIcqFaHb9ZotlBwFi71Azay1niq833Q3so8tn2mqFdyDB6yWrwwBSmJn1a4/gz2WsrG1AO/cRks21DXDS1XZRDpsldwMI4B5AtYTWhevhbgAB8BkBcAMS5C71fwsruAAAAABJRU5ErkJggg==', 'settings': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA60lEQVR4nOVWwQ3EIAwjp5uJkRiqI3Up7oVUoSTYSVUqnV+VGhuDTEgp/w7JkI+z9/HdqoS0PhkDd+DdBq5HnIGnYxoYpKyJlY5qYC6OmkB0VANaolkTWr2m614dVCTDc0M4k9C7zvAgwePsfRZBdqnxQgY0Q9Y/tiPSBqz2G23LVCf0FrHMrPBFSGioWhVhekirIu9+C54AFcJV0CJBpE7AC1r0FmzvA9AJzAt6t8DjaaAeFmZ3KI+aiNAGw/BMZ+hjg/yzakoBJyKL7AEdaqCJKDrzIzpmBkZxdHFUh5qIsiZoA09gu4Ht+AF22LDSzAMOgQAAAABJRU5ErkJggg==', 'diagnostics': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAArUlEQVR4nO2WQQ7AEBBFaXomR3IoR3IpXdnIGGX+Z+OvJE36XuercO7m5nA8+oUpl6I9j8HDmapEb13zMARi8D7lUipQmwpFQEpPgiIgwXrdwwVGm7DNy4bXL6dXMBp7rwLIPznTeRvzBCxws4AVbhJAwJcFUPAlASR8WgANnxJgwH8LsODOKQeRdqYjLxXiBHbBRYGdcFGACZsS2CUhApi7vo04gRa2q46bI/kAymdmU6olyVwAAAAASUVORK5CYII=', 'export': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAi0lEQVR4nO2Vyw2AIBBEwViTJVmUJdkUnkz2APtDMgfnnTDh8xgWLIX8nToz+Lpbe9vnUVNzbTMCX5AWkLvvfS8VGC2WkQgLWItEJUIC3skjEm6B6M68/XkN4QLD2LL3WqN3TPAEdquDVlzeItTShCdAAbiAWYQa2ddPAk+AAnABswhX/BMk8AQIeQCSdjoIVa8EFAAAAABJRU5ErkJggg==', 'help': 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA2klEQVR4nO1WWw7DMAij087UI+1QO1Iv1X2lijpwbEorTSufPGwLiIjZbf9uU6bovaxrFHvNk4QpJSPirBAqaU+MwJVcSkAPqLSXrYOACMQbB8qJRDyqyD1/X6fsz1bgFUX+bE0ZebY2HIEHYDZexBaXW94TpYsHGJ6f7sBZ9jsCKkZzSAC7XOyyygIYESq5mdlTEdDA0TjUc/zVAabVEQlzJfc5cgcYshKr3HqENVxCduuz8VAAc0qbnznP8n+AEdHiHnjJjygiv/RPiMCRlf6KFSGnP8/bqu0DA/LtoxKQSQsAAAAASUVORK5CYII='}
+    for name in (
+        "dashboard", "recordings", "web", "smart", "calendar",
+        "settings", "diagnostics", "export", "help",
+    ):
+        try:
+            p = base / f"{name}.png"
+            if p.exists():
+                self._ui_images[name] = tk.PhotoImage(file=str(p))
+            elif name in embedded_icons:
+                self._ui_images[name] = tk.PhotoImage(data=embedded_icons[name])
+        except Exception as exc:
+            log_error(f"load_ui_image_{name}", exc)
+
+    for name in ("logo_72", "logo_52", "logo_32"):
+        try:
+            p = base / f"{name}.png"
+            if p.exists():
+                self._ui_images[name] = tk.PhotoImage(file=str(p))
+        except Exception as exc:
+            log_error(f"load_ui_image_{name}", exc)
+    try:
+        if getattr(self, "_app_icon", None):
+            if "logo_72" not in self._ui_images:
+                self._ui_images["logo_72"] = self._app_icon.subsample(4, 4)
+            if "logo_52" not in self._ui_images:
+                self._ui_images["logo_52"] = self._app_icon.subsample(5, 5)
+            if "logo_32" not in self._ui_images:
+                self._ui_images["logo_32"] = self._app_icon.subsample(8, 8)
+    except Exception as exc:
+        log_error("derive_ui_logos", exc)
+
+
+def _v13_hover_button(self, button, normal_bg, hover_bg, normal_fg=None):
+    fg = normal_fg or self.colors()["text"]
+    button.configure(bg=normal_bg, fg=fg, activebackground=hover_bg, activeforeground=fg)
+    button.bind("<Enter>", lambda _e: button.configure(bg=hover_bg), add="+")
+    button.bind("<Leave>", lambda _e: button.configure(bg=normal_bg), add="+")
+
+
+def _v13_card(self, parent, row, column, columnspan=1, rowspan=1, padx=6, pady=6, sticky="nsew", bg=None):
+    c = self.colors()
+    outer = tk.Frame(parent, bg=c["border"], bd=0, highlightthickness=0)
+    outer.grid(row=row, column=column, columnspan=columnspan, rowspan=rowspan, sticky=sticky, padx=padx, pady=pady)
+    inner = tk.Frame(outer, bg=bg or c["card"], bd=0, highlightthickness=0)
+    inner.pack(fill="both", expand=True, padx=1, pady=1)
+    return inner
+
+
+def _v13_card_title(self, parent, title, icon="", color=None, help_command=None):
+    c = self.colors()
+    header = tk.Frame(parent, bg=parent.cget("bg"))
+    header.pack(fill="x", padx=14, pady=(10, 7))
+    text = f"{icon}  {title}" if icon else title
+    tk.Label(
+        header, text=text, bg=parent.cget("bg"), fg=color or c["text"],
+        font=(self.ui_font, 12, "bold"), anchor="w"
+    ).pack(side="left")
+    if help_command:
+        b = tk.Button(
+            header, text="?", command=help_command, relief="flat", bd=0, padx=7, pady=2,
+            bg=c["panel3"], fg=c["sub"], activebackground=c["accent"], activeforeground="#FFFFFF",
+            font=(self.ui_font, 9, "bold"), cursor="hand2"
+        )
+        b.pack(side="right")
+    tk.Frame(parent, bg=c["border_soft"], height=1).pack(fill="x")
+
+
+def _v13_build_layout(self):
+    c = self.colors()
+    self._load_ui_images()
+
+    self.grid_rowconfigure(1, weight=1)
+    self.grid_columnconfigure(0, weight=1)
+
+    top = tk.Frame(self, bg=c["bg"], height=92)
+    top.grid(row=0, column=0, sticky="ew")
+    top.grid_propagate(False)
+    top.grid_columnconfigure(1, weight=1)
+
+    brand = tk.Frame(top, bg=c["bg"])
+    brand.grid(row=0, column=0, sticky="w", padx=(18, 8), pady=8)
+    if self._ui_images.get("logo_72"):
+        tk.Label(brand, image=self._ui_images["logo_72"], bg=c["bg"], bd=0).pack(side="left", padx=(0, 12))
+    brand_text = tk.Frame(brand, bg=c["bg"])
+    brand_text.pack(side="left")
+    line = tk.Frame(brand_text, bg=c["bg"])
+    line.pack(anchor="w")
+    tk.Label(line, text="Rice2k", bg=c["bg"], fg=c["accent"], font=(self.ui_font, 24, "bold")).pack(side="left")
+    tk.Label(line, text=" Macro Studio", bg=c["bg"], fg=c["text"], font=(self.ui_font, 24, "bold")).pack(side="left")
+    tk.Label(line, text="  v1.3", bg=c["bg"], fg=c["sub"], font=(self.ui_font, 9)).pack(side="left", pady=(8, 0))
+    tk.Label(
+        brand_text, text="Record  •  Automate  •  Simplify",
+        bg=c["bg"], fg=c["sub"], font=(self.ui_font, 10)
+    ).pack(anchor="w", pady=(3, 0))
+
+    tk.Label(
+        top, text="Automate Today   ▶   Do More Tomorrow",
+        bg=c["bg"], fg="#55C7FF", font=(self.ui_font, 14, "italic")
+    ).grid(row=0, column=1, sticky="e", padx=22)
+
+    tools = tk.Frame(top, bg=c["bg"])
+    tools.grid(row=0, column=2, sticky="e", padx=(6, 18))
+    for label, cmd in (("?  Help", self.show_help), ("☼  Theme", self.show_settings), ("⚙  Settings", self.show_settings)):
+        b = tk.Button(
+            tools, text=label, command=cmd, relief="flat", bd=0, padx=10, pady=8,
+            bg=c["bg"], fg=c["sub"], activebackground=c["panel3"], activeforeground=c["text"],
+            font=(self.ui_font, 10), cursor="hand2"
+        )
+        b.pack(side="left", padx=2)
+
+    body = tk.Frame(self, bg=c["bg"])
+    body.grid(row=1, column=0, sticky="nsew")
+    body.grid_rowconfigure(0, weight=1)
+    body.grid_columnconfigure(1, weight=1)
+
+    sidebar = tk.Frame(body, bg=c["panel2"], width=178)
+    sidebar.grid(row=0, column=0, sticky="nsw")
+    sidebar.grid_propagate(False)
+
+    self.sidebar_buttons = {}
+    nav_items = [
+        ("dashboard", "Dashboard", self.show_dashboard),
+        ("recordings", "Recordings", self.show_recordings),
+        ("web", "Web Capture", self.show_automation),
+        ("smart", "Smart Targets", self.show_smart_actions),
+        ("calendar", "Calendar", self.show_calendar_guide),
+        ("settings", "Settings", self.show_settings),
+        ("diagnostics", "Diagnostics", self.show_diagnostics),
+        ("export", "Export", self.show_exports),
+        ("help", "Help", self.show_help),
+    ]
+    for i, (icon_name, label, cmd) in enumerate(nav_items):
+        img = self._ui_images.get(icon_name)
+        b = tk.Button(
+            sidebar, image=img, text=label, compound="left", anchor="w", command=cmd,
+            relief="flat", bd=0, padx=12, pady=9,
+            bg=c["panel2"], fg=c["sub"], activebackground=c["panel3"], activeforeground=c["text"],
+            font=(self.ui_font, 10), cursor="hand2"
+        )
+        b.pack(fill="x", padx=8, pady=(9 if i == 0 else 2, 1))
+        self.sidebar_buttons[label] = b
+        self._hover_button(b, c["panel2"], c["panel3"], c["sub"])
+
+    bottom = tk.Frame(sidebar, bg=c["panel2"])
+    bottom.pack(side="bottom", fill="x", pady=14)
+    tk.Frame(bottom, bg=c["border_soft"], height=1).pack(fill="x", padx=12, pady=(0, 10))
+    if self._ui_images.get("logo_52"):
+        tk.Label(bottom, image=self._ui_images["logo_52"], bg=c["panel2"]).pack()
+    tk.Label(bottom, text="Rice2k", bg=c["panel2"], fg=c["accent"], font=(self.ui_font, 11, "bold")).pack(pady=(3, 0))
+    tk.Label(
+        bottom, text='"Small Tools.\nBig Possibilities."', bg=c["panel2"], fg=c["sub"],
+        font=(self.ui_font, 8, "italic"), justify="center"
+    ).pack()
+
+    self.content = tk.Frame(body, bg=c["bg"])
+    self.content.grid(row=0, column=1, sticky="nsew", padx=(16, 18), pady=(12, 8))
+    self.content.grid_rowconfigure(0, weight=1)
+    self.content.grid_columnconfigure(0, weight=1)
+
+    footer = tk.Frame(self, bg=c["panel2"], height=44)
+    footer.grid(row=2, column=0, sticky="ew")
+    footer.grid_propagate(False)
+    footer.grid_columnconfigure(3, weight=1)
+    self.clock_var = tk.StringVar(value="")
+    tk.Label(footer, text="●", bg=c["panel2"], fg=c["success"], font=(self.ui_font, 14)).grid(row=0, column=0, padx=(18, 4), pady=8)
+    tk.Label(footer, textvariable=self.status_var, bg=c["panel2"], fg=c["success"], font=(self.ui_font, 9, "bold")).grid(row=0, column=1, padx=(0, 12))
+    tk.Frame(footer, bg=c["border"], width=1, height=24).grid(row=0, column=2, padx=4)
+    tk.Label(footer, textvariable=self.loaded_file_var, bg=c["panel2"], fg=c["sub"], font=(self.ui_font, 9), anchor="w").grid(row=0, column=3, sticky="w", padx=8)
+    tk.Label(footer, text=str(APP_DIR), bg=c["panel2"], fg=c["sub"], font=(self.ui_font, 9)).grid(row=0, column=4, padx=12)
+    tk.Label(footer, textvariable=self.clock_var, bg=c["panel2"], fg=c["text"], font=(self.ui_font, 9)).grid(row=0, column=5, padx=(10, 18))
+
+    self._wheel_canvas = None
+    self.bind_all("<MouseWheel>", self._global_mousewheel, add="+")
+    self.bind_all("<Button-4>", self._global_mousewheel, add="+")
+    self.bind_all("<Button-5>", self._global_mousewheel, add="+")
+    self._update_clock()
+    self.show_dashboard()
