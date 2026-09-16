@@ -1,48 +1,34 @@
-Rice2k Macro Studio v1.0 Changelog
+Rice2k Macro Studio v1.1 Changelog
 
-STARTUP / LAUNCHER
-- Fixed startup-blocking missing choose_recording method
-- Added missing open_raw_editor method
-- Rebuilt Run_Rice2k_Macro_Studio.bat as a self-diagnosing launcher
-- Detects py -3 and python
-- Detects Microsoft Store/no-real-Python situations
-- Verifies Tkinter
-- Repairs missing pip dependencies
-- Runs py_compile before startup
-- Detects incomplete ZIP extraction
-- Added Run_Setup_Diagnostics.bat
-- Launcher keeps errors visible instead of flashing closed
-- Launcher always attempts to write launcher_log.txt
+WEBSITE RECORDING FILTERS
+- Added independent browser capture toggles for Clicks, Scroll, Click Location, Text Input, and Selections
+- Added quick presets: All Safe, Clicks Only, Click + Location, Scroll Only, Input Only, Selection Only
+- Browser helper receives the app's saved website-filter defaults when generated
+- Browser helper also lets filters be changed live while capturing
+- Added debounced scroll recording for the page and scrollable elements
+- Added semantic scroll replay using saved scroll positions
+- Added opt-in non-sensitive text-input capture and replay
+- Added dropdown, checkbox, radio, date, month, and week selection recording/replay
+- Click coordinates can now be omitted for semantic-only click recording
+- Smart Action exports preserve browser event type and scroll/input/selection details
 
-CRASH / ERROR LOGGING
-- Added main-thread uncaught exception logging
-- Added worker-thread exception logging
-- Added Tkinter callback exception logging
-- Added startup_log.txt
-- Added faulthandler.log where supported
-- Added fallback error/startup logging under TEMP when Documents is unavailable
+PRIVACY / SAFETY
+- Text input remains OFF by default
+- Password/passcode/token/secret/API-key/authentication/OTP/verification-code/CVV/CVC/PIN/SSN-like fields are always blocked/redacted
+- Sensitive fields are blocked from input replay
 
-SETTINGS
-- Invalid settings are sanitized instead of breaking startup
-- Corrupt settings JSON falls back safely
-- Invalid numeric ranges are clamped
-- Invalid/duplicate hotkeys reset safely
-- Settings writes use a temporary file before replacement
-- save_vars tolerates invalid in-progress Spinbox contents
+GITHUB SOURCE LAYOUT
+- Added src_patches/v1_1_website_filters.pyfrag
+- Source loader injects version patches immediately before main() starts
+- EXE build now bundles src_patches
+- Launcher validates the patched reconstructed source before starting
 
-GUI / EDITOR
-- Added functional Raw Action Editor
-- Fixed Raw Action Editor row overlap
-- Fixed live speed-value display
-- Reduced settings writes while dragging speed slider
-- Verified Dashboard, Recordings, Smart Targets, Exports, Automation, Calendar Guide, Diagnostics, Settings, Help, Raw Editor and Error Log under a virtual Tk display
-
-INPUT / TARGETING
-- Scroll-only recording now works without Mouse clicks enabled
-- Mouse movement-only listener is supported
-- Target matching now requires compatible process + title when both were recorded
-- Prevents same-process wrong-window/tab matches from being accepted too easily
-
-PACKAGE
-- Removed obsolete Browser_Capture_Helper.html
-- Desktop shortcut targets EXE when built or reliable BAT launcher otherwise
+PREVIOUS v1.0 CHANGES
+- Reliable self-diagnosing launcher and setup diagnostics
+- Startup, Tkinter callback, worker-thread, and fallback error logging
+- Settings sanitation and recovery
+- Raw Action Editor
+- Live speed display fixes
+- Scroll-only recording support
+- Stricter target-window validation
+- Calendar TODAY rules and Smart Targets
