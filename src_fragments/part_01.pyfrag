@@ -1,0 +1,331 @@
+"""
+Rice2k Macro Studio v1.0
+
+Windows macro recording and automation studio with smart targets, browser actions,
+scroll capture, diagnostics, exports, dynamic dates, and reliable playback controls.
+"""
+
+import json
+import os
+import sys
+import time
+import queue
+import random
+import threading
+import datetime
+import csv
+import traceback
+import re
+import tkinter as tk
+from tkinter import ttk, messagebox, filedialog
+from dataclasses import dataclass, asdict
+from pathlib import Path
+
+try:
+    import pyautogui
+except Exception:
+    pyautogui = None
+
+try:
+    from pynput import mouse, keyboard
+except Exception:
+    mouse = None
+    keyboard = None
+
+try:
+    import psutil
+except Exception:
+    psutil = None
+
+try:
+    from screeninfo import get_monitors
+except Exception:
+    get_monitors = None
+
+try:
+    from pywinauto import Desktop
+except Exception:
+    Desktop = None
+
+APP_NAME = "Rice2k Macro Studio"
+APP_VERSION = "1.0 GitHub Release"
+APP_DIR = Path.home() / "Documents" / "Rice2k Macro Studio"
+RECORDINGS_DIR = APP_DIR / "Recordings"
+LOGS_DIR = APP_DIR / "Logs"
+ERRORS_DIR = APP_DIR / "Errors"
+EXPORTS_DIR = APP_DIR / "Exports"
+RECOVERY_DIR = APP_DIR / "Recovery"
+PROFILES_DIR = APP_DIR / "Profiles"
+WEBSITE_ACTIONS_DIR = APP_DIR / "Website Actions"
+SETTINGS_FILE = APP_DIR / "settings.json"
+ERROR_LOG_FILE = ERRORS_DIR / "error_log.txt"
+STARTUP_LOG_FILE = ERRORS_DIR / "startup_log.txt"
+FALLBACK_LOG_DIR = Path(os.environ.get("TEMP") or os.environ.get("TMP") or Path.home()) / "Rice2k Macro Studio"
+FALLBACK_ERROR_LOG_FILE = FALLBACK_LOG_DIR / "error_log.txt"
+FALLBACK_STARTUP_LOG_FILE = FALLBACK_LOG_DIR / "startup_log.txt"
+RECOVERY_JOURNAL = RECOVERY_DIR / "active_recording.jsonl"
+
+STATE_IDLE = "IDLE"
+STATE_RECORDING = "RECORDING"
+STATE_RECORDING_PAUSED = "RECORDING_PAUSED"
+STATE_PLAYING = "PLAYING"
+STATE_PLAYING_PAUSED = "PLAYING_PAUSED"
+
+DEFAULT_SETTINGS = {
+    "speed": 1.0,
+    "repeat_count": 1,
+    "delay_seconds": 0,
+    "countdown_seconds": 3,
+    "record_mouse": True,
+    "record_keyboard": False,
+    "record_scroll": True,
+    "record_mouse_moves": False,
+    "playback_skip_moves": True,
+    "automation_mode": "click_fast",
+    "mouse_only_safe_mode": True,
+    "human_like": False,
+    "target_validation": True,
+    "pause_on_target_change": True,
+    "record_smart_targets": True,
+    "smart_target_playback": True,
+    "calendar_today_enabled": True,
+    "debug_logging": False,
+    "run_behavior": "manual",
+    "last_recording": "",
+    "theme": "dark",
+    "calibration_x": 0,
+    "calibration_y": 0,
+    "hotkey_start": "f8",
+    "hotkey_stop": "f9",
+    "hotkey_pause": "f10",
+    "hotkey_play": "f12",
+    "hotkey_emergency": "esc",
+}
+
+THEMES = {
+    "dark": {
+        "bg": "#0B1220", "panel": "#111C2E", "panel2": "#0A1322",
+        "text": "#EAF0F7", "sub": "#94A3B8", "accent": "#4DA3FF",
+        "accent2": "#66D9C9", "warning": "#F6C85F", "danger": "#FF6B6B",
+        "success": "#42C98A", "border": "#26364D"
+    },
+    "light": {
+        "bg": "#F3F6FA", "panel": "#FFFFFF", "panel2": "#F7FAFC",
+        "text": "#172033", "sub": "#5F6B7A", "accent": "#2563EB",
+        "accent2": "#0F9D8A", "warning": "#A66A00", "danger": "#C24141",
+        "success": "#21895F", "border": "#D7E0EA"
+    },
+}
+
+
+def ensure_folders():
+    for folder in [APP_DIR, RECORDINGS_DIR, LOGS_DIR, ERRORS_DIR, EXPORTS_DIR, RECOVERY_DIR, PROFILES_DIR, WEBSITE_ACTIONS_DIR]:
+        folder.mkdir(parents=True, exist_ok=True)
+
+
+def now_stamp():
+    return datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+
+
+def _safe_bool(value, default=False):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        low = value.strip().lower()
+        if low in {"1", "true", "yes", "on"}:
+            return True
+        if low in {"0", "false", "no", "off"}:
+            return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return default
+
+
+def _safe_int(value, default, minimum=None, maximum=None):
+    try:
+        result = int(value)
+    except Exception:
+        result = int(default)
+    if minimum is not None:
+        result = max(minimum, result)
+    if maximum is not None:
+        result = min(maximum, result)
+    return result
+
+
+def _safe_float(value, default, minimum=None, maximum=None):
+    try:
+        result = float(value)
+    except Exception:
+        result = float(default)
+    if minimum is not None:
+        result = max(minimum, result)
+    if maximum is not None:
+        result = min(maximum, result)
+    return result
+
+
+def sanitize_settings(raw):
+    """Normalize old/corrupt settings so a bad settings.json cannot stop the GUI from opening."""
+    raw = raw if isinstance(raw, dict) else {}
+    data = DEFAULT_SETTINGS.copy()
+    data.update(raw)
+
+    data["speed"] = _safe_float(data.get("speed"), 1.0, 0.1, 100.0)
+    data["repeat_count"] = _safe_int(data.get("repeat_count"), 1, 1, 999)
+    data["delay_seconds"] = _safe_int(data.get("delay_seconds"), 0, 0, 99999)
+    data["countdown_seconds"] = _safe_int(data.get("countdown_seconds"), 3, 0, 30)
+    data["calibration_x"] = _safe_int(data.get("calibration_x"), 0, -3000, 3000)
+    data["calibration_y"] = _safe_int(data.get("calibration_y"), 0, -3000, 3000)
+
+    for key in [
+        "record_mouse", "record_keyboard", "record_scroll", "record_mouse_moves",
+        "playback_skip_moves", "mouse_only_safe_mode", "human_like",
+        "target_validation", "pause_on_target_change", "record_smart_targets",
+        "smart_target_playback", "calendar_today_enabled", "debug_logging",
+    ]:
+        data[key] = _safe_bool(data.get(key), DEFAULT_SETTINGS.get(key, False))
+
+    if data.get("automation_mode") not in {"click_fast", "physical", "browser", "window_aware"}:
+        data["automation_mode"] = "click_fast"
+    if data.get("run_behavior") not in {"manual", "after_save", "on_start"}:
+        data["run_behavior"] = "manual"
+    if data.get("theme") not in THEMES:
+        data["theme"] = "dark"
+
+    allowed_hotkeys = {"f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "esc"}
+    defaults = {
+        "hotkey_start": "f8", "hotkey_stop": "f9", "hotkey_pause": "f10",
+        "hotkey_play": "f12", "hotkey_emergency": "esc",
+    }
+    for key, default in defaults.items():
+        value = str(data.get(key, default)).lower().strip()
+        data[key] = value if value in allowed_hotkeys else default
+
+    # Prevent duplicate hotkeys from a corrupted/old settings file from breaking control flow.
+    hotkeys = [data[k] for k in defaults]
+    if len(set(hotkeys)) != len(hotkeys):
+        data.update(defaults)
+
+    last = data.get("last_recording", "")
+    data["last_recording"] = str(last) if last else ""
+    return data
+
+
+def load_settings():
+    ensure_folders()
+    raw = {}
+    try:
+        if SETTINGS_FILE.exists():
+            raw = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+    except Exception as exc:
+        log_error("load_settings", exc, "Invalid settings file; defaults will be used.")
+        raw = {}
+    data = sanitize_settings(raw)
+    try:
+        # Rewrite normalized settings so future launches use safe values.
+        SETTINGS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception as exc:
+        log_error("load_settings_rewrite", exc)
+    return data
+
+
+def save_settings(settings):
+    ensure_folders()
+    data = sanitize_settings(settings)
+    temp = SETTINGS_FILE.with_suffix(".json.tmp")
+    temp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    temp.replace(SETTINGS_FILE)
+
+
+
+def _safe_append_log(preferred_path, fallback_path, text):
+    """Try the normal Documents log first, then TEMP/home fallback."""
+    for path in (Path(preferred_path), Path(fallback_path)):
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as f:
+                f.write(text)
+            return path
+        except Exception:
+            continue
+    return None
+
+
+def rotate_error_log(max_bytes=2_000_000, backups=3):
+    ensure_folders()
+    try:
+        if not ERROR_LOG_FILE.exists() or ERROR_LOG_FILE.stat().st_size < max_bytes:
+            return
+        for idx in range(backups, 0, -1):
+            old = ERRORS_DIR / f"error.{idx}.log"
+            prev = ERROR_LOG_FILE if idx == 1 else ERRORS_DIR / f"error.{idx-1}.log"
+            if old.exists():
+                old.unlink()
+            if prev.exists():
+                prev.rename(old)
+    except Exception:
+        pass
+
+
+def log_error(source, exc=None, extra=""):
+    try:
+        rotate_error_log()
+    except Exception:
+        pass
+
+    lines = [
+        "=" * 80,
+        f"Time: {datetime.datetime.now().isoformat()}",
+        f"Version: {APP_VERSION}",
+        f"Python: {sys.version.split()[0]}",
+        f"Platform: {sys.platform}",
+        f"Source: {source}",
+    ]
+    if extra:
+        lines.append(f"Extra: {extra}")
+    if exc is not None:
+        lines.extend([
+            f"Type: {type(exc).__name__}",
+            f"Error: {exc}",
+            "Traceback:",
+            "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)).rstrip(),
+        ])
+    lines.append("")
+    _safe_append_log(
+        ERROR_LOG_FILE,
+        FALLBACK_ERROR_LOG_FILE,
+        "\n".join(lines) + "\n"
+    )
+
+
+def write_startup_event(message):
+    line = f"{datetime.datetime.now().isoformat()} | {APP_VERSION} | {message}\n"
+    _safe_append_log(STARTUP_LOG_FILE, FALLBACK_STARTUP_LOG_FILE, line)
+
+
+def install_global_error_logger():
+    """Capture uncaught main-thread and worker-thread exceptions, even if Documents is unavailable."""
+    def write_uncaught(source, exc_type, exc_value, exc_tb, extra=""):
+        text = (
+            "=" * 80 + "\n"
+            f"Time: {datetime.datetime.now().isoformat()}\n"
+            f"Version: {APP_VERSION}\n"
+            f"Python: {sys.version}\n"
+            f"Platform: {sys.platform}\n"
+            f"Source: {source}\n"
+            + (f"Extra: {extra}\n" if extra else "")
+            + "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+            + "\n"
+        )
+        _safe_append_log(ERROR_LOG_FILE, FALLBACK_ERROR_LOG_FILE, text)
+
+    def handler(exc_type, exc_value, exc_tb):
+        write_uncaught("uncaught main-thread exception", exc_type, exc_value, exc_tb)
+
+    sys.excepthook = handler
+
+    if hasattr(threading, "excepthook"):
+        def thread_handler(args):
+            thread_name = getattr(args.thread, "name", "unknown")
