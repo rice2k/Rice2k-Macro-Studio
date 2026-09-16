@@ -1,5 +1,13 @@
 Rice2k Macro Studio v1.1 Changelog
 
+DETAILED DOCUMENTATION
+- Full Markdown changelog: CHANGELOG.md
+- Version history: docs/VERSION_HISTORY.md
+- Feature guide: docs/FEATURES.md
+- User guide: docs/USER_GUIDE.md
+- Logging and diagnostics: docs/LOGGING_AND_DIAGNOSTICS.md
+- Troubleshooting: docs/TROUBLESHOOTING.md
+
 WEBSITE RECORDING FILTERS
 - Added independent browser capture toggles for Clicks, Scroll, Click Location, Text Input, and Selections
 - Added quick presets: All Safe, Clicks Only, Click + Location, Scroll Only, Input Only, Selection Only
