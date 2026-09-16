@@ -1,0 +1,211 @@
+            raise RuntimeError("Playback requires pyautogui.")
+        actions = self.snapshot_actions()
+        if not actions:
+            raise RuntimeError("No recording loaded.")
+
+        self.state = STATE_PLAYING
+        self.stop_event.clear()
+        self.pause_event.clear()
+        self.held_keys.clear()
+        self.held_buttons.clear()
+        self.semantic_release_skip.clear()
+        speed = max(0.1, float(self.settings.get("speed", 1.0)))
+        repeat = max(1, int(self.settings.get("repeat_count", 1)))
+        between = max(0, int(self.settings.get("delay_seconds", 0)))
+        cal_x = int(self.settings.get("calibration_x", 0))
+        cal_y = int(self.settings.get("calibration_y", 0))
+        skip_moves = bool(self.settings.get("playback_skip_moves", True))
+        replay_keyboard = bool(self.settings.get("record_keyboard")) and not bool(self.settings.get("mouse_only_safe_mode"))
+        human_like = bool(self.settings.get("human_like"))
+        current_virtual = get_virtual_screen_bounds()
+        semantic_click_indices = simple_semantic_click_press_indices(actions)
+
+        try:
+            pyautogui.PAUSE = 0
+            pyautogui.MINIMUM_DURATION = 0
+            pyautogui.MINIMUM_SLEEP = 0
+        except Exception:
+            pass
+
+        try:
+            for sec in range(max(0, int(self.settings.get("countdown_seconds", 3))), 0, -1):
+                self.status_callback(f"Starting in {sec}")
+                if not self._wait_interruptible(1.0):
+                    return
+
+            for run_index in range(1, repeat + 1):
+                if self.stop_event.is_set():
+                    break
+                if update_callback:
+                    update_callback(run_index, repeat)
+                self.status_callback(f"Playing run {run_index}/{repeat}")
+
+                for action_index, action in enumerate(actions):
+                    if self.stop_event.is_set():
+                        break
+                    while self.pause_event.is_set() and not self.stop_event.is_set():
+                        time.sleep(0.02)
+
+                    delay = float(action.get("time_since_last", 0)) / speed
+                    if human_like:
+                        delay += random.uniform(0.003, 0.025)
+                    if not self._wait_interruptible(delay):
+                        break
+
+                    action_type = action.get("type")
+                    if action_type == "move" and skip_moves:
+                        continue
+
+                    if action_type in {"click", "scroll"} and not self._target_matches(action):
+                        if self.settings.get("pause_on_target_change", True):
+                            self.pause_event.set()
+                            self.state = STATE_PLAYING_PAUSED
+                            self.status_callback("Paused: target window changed")
+                            self.log_callback("Playback paused because target app/window changed.")
+                            while self.pause_event.is_set() and not self.stop_event.is_set():
+                                time.sleep(0.05)
+                        else:
+                            raise RuntimeError("Target window changed before an input action.")
+
+                    if action_type in {"move", "click", "scroll"}:
+                        x, y = self._map_point(action, current_virtual, cal_x, cal_y)
+
+                    if action_type == "move":
+                        pyautogui.moveTo(x, y, duration=0)
+                    elif action_type == "click":
+                        btn = action.get("button", "left") or "left"
+                        has_semantic_target = bool(
+                            action.get("dynamic_rule") or action.get("control_name") or
+                            action.get("automation_id") or action.get("control_type")
+                        )
+                        semantic_done = False
+                        if (
+                            action.get("pressed")
+                            and action_index in semantic_click_indices
+                            and has_semantic_target
+                            and self.settings.get("smart_target_playback", True)
+                        ):
+                            semantic_done = uia_invoke_action(action)
+                            if semantic_done:
+                                self.semantic_release_skip.add(btn)
+                                self.log_callback(f"Smart target invoked: {action.get('control_type','')} {action.get('control_name','')}")
+                                continue
+                        if not action.get("pressed") and btn in self.semantic_release_skip:
+                            self.semantic_release_skip.discard(btn)
+                            continue
+                        pyautogui.moveTo(x, y, duration=0)
+                        if action.get("pressed"):
+                            pyautogui.mouseDown(button=btn)
+                            self.held_buttons.add(btn)
+                        else:
+                            pyautogui.mouseUp(button=btn)
+                            self.held_buttons.discard(btn)
+                    elif action_type == "scroll":
+                        pyautogui.moveTo(x, y, duration=0)
+                        dy = int(action.get("dy", 0))
+                        dx = int(action.get("dx", 0))
+                        if dy:
+                            pyautogui.scroll(dy, x=x, y=y)
+                        if dx and hasattr(pyautogui, "hscroll"):
+                            pyautogui.hscroll(dx, x=x, y=y)
+                    elif action_type == "key" and replay_keyboard:
+                        replay_key = normalize_replay_key(action.get("key", ""), action.get("key_kind", "special"))
+                        if replay_key:
+                            if action.get("pressed"):
+                                pyautogui.keyDown(replay_key)
+                                self.held_keys.add(replay_key)
+                            else:
+                                pyautogui.keyUp(replay_key)
+                                self.held_keys.discard(replay_key)
+
+                if run_index < repeat and between and not self.stop_event.is_set():
+                    self.status_callback(f"Waiting {between}s before next run")
+                    if not self._wait_interruptible(between):
+                        break
+        finally:
+            self.release_all_inputs()
+            self.pause_event.clear()
+            self.state = STATE_IDLE
+            self.status_callback("Ready")
+            self.log_callback("Playback finished/stopped and held inputs were released.")
+
+    def release_all_inputs(self):
+        if pyautogui is None:
+            return
+        for key in list(self.held_keys):
+            try:
+                pyautogui.keyUp(key)
+            except Exception:
+                pass
+        for btn in list(self.held_buttons):
+            try:
+                pyautogui.mouseUp(button=btn)
+            except Exception:
+                pass
+        self.held_keys.clear()
+        self.held_buttons.clear()
+        self.semantic_release_skip.clear()
+
+    def preflight(self):
+        checks = []
+        actions = self.snapshot_actions()
+        checks.append(("Recording loaded", bool(actions), f"{len(actions)} raw actions" if actions else "No actions loaded"))
+        checks.append(("Input library", pyautogui is not None, "pyautogui available" if pyautogui else "pyautogui missing"))
+        checks.append(("Recorder library", mouse is not None and keyboard is not None, "pynput available" if mouse and keyboard else "pynput missing"))
+        if sys.platform.startswith("win"):
+            checks.append(("Windows UI Automation", Desktop is not None, "pywinauto available" if Desktop is not None else "pywinauto missing; smart Windows targets fall back to coordinates"))
+        semantic_count = len([a for a in actions if a.get("control_name") or a.get("automation_id") or a.get("dynamic_rule")])
+        checks.append(("Smart target metadata", True, f"{semantic_count} semantic/dynamic raw actions"))
+        current_virtual = get_virtual_screen_bounds()
+        checks.append(("Virtual desktop", current_virtual["width"] > 0 and current_virtual["height"] > 0, str(current_virtual)))
+        if actions:
+            first = actions[0]
+            rec_proc = first.get("process_name") or ""
+            cur = active_window_info()
+            if rec_proc:
+                checks.append(("Target process", rec_proc.lower() == (cur.get("process") or "").lower(), f"recorded={rec_proc}; current={cur.get('process','')}"))
+        hotkeys = [self.settings.get(k, "") for k in ["hotkey_start", "hotkey_stop", "hotkey_pause", "hotkey_play", "hotkey_emergency"]]
+        checks.append(("Hotkey uniqueness", len(set(hotkeys)) == len(hotkeys), ", ".join(hotkeys)))
+        return checks
+
+
+def normalize_replay_key(key, kind):
+    if not key:
+        return ""
+    if kind == "char":
+        return key.lower() if len(key) == 1 and key.isalpha() else key
+    mapping = {
+        "space": "space", "enter": "enter", "tab": "tab", "backspace": "backspace", "delete": "delete",
+        "shift": "shift", "shift_l": "shift", "shift_r": "shift", "ctrl": "ctrl", "ctrl_l": "ctrl", "ctrl_r": "ctrl",
+        "alt": "alt", "alt_l": "alt", "alt_r": "alt", "cmd": "win", "cmd_l": "win", "cmd_r": "win",
+        "up": "up", "down": "down", "left": "left", "right": "right", "home": "home", "end": "end",
+        "page_up": "pageup", "page_down": "pagedown", "caps_lock": "capslock", "esc": "esc",
+    }
+    if key.startswith("f") and key[1:].isdigit():
+        return key
+    return mapping.get(key, key)
+
+
+def build_smart_actions(actions):
+    smart = []
+    i = 0
+    text_buffer = []
+    text_meta = None
+
+    def flush_text():
+        nonlocal text_buffer, text_meta
+        if text_buffer:
+            meta = dict(text_meta or {})
+            meta.update({"type": "type_text", "text": "".join(text_buffer)})
+            smart.append(meta)
+            text_buffer = []
+            text_meta = None
+
+    while i < len(actions):
+        a = actions[i]
+        t = a.get("type")
+        if t == "move":
+            i += 1
+            continue
+        if t == "click" and a.get("pressed") and i + 1 < len(actions):
+            b = actions[i + 1]
