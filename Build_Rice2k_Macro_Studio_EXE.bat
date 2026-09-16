@@ -1,5 +1,5 @@
 @echo off
-title Build Rice2k Macro Studio v1.3 EXE
+title Build Rice2k Macro Studio v1.4.1 EXE
 cd /d "%~dp0"
 
 echo Installing/updating requirements...
