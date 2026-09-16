@@ -1,0 +1,1 @@
+UI preview images are documented in README.md and docs/V1_2_UI_REDESIGN.md. The application icon is stored at the repository root as rice2k_macro_studio.png.
