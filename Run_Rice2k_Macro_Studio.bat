@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-title Rice2k Macro Studio v1.3 Launcher
+title Rice2k Macro Studio v1.4.1 Launcher
 cd /d "%~dp0"
 
 set "LOGDIR=%USERPROFILE%\Documents\Rice2k Macro Studio\Errors"
@@ -12,11 +12,11 @@ if not exist "%LOGDIR%" (
 set "LOG=%LOGDIR%\launcher_log.txt"
 
 >>"%LOG%" echo ================================================================================
->>"%LOG%" echo [%DATE% %TIME%] Rice2k Macro Studio v1.3 launcher starting
+>>"%LOG%" echo [%DATE% %TIME%] Rice2k Macro Studio v1.4.1 launcher starting
 >>"%LOG%" echo Package folder: %CD%
 
 echo.
-echo Rice2k Macro Studio v1.3
+echo Rice2k Macro Studio v1.4.1
 echo Checking files, Python, and startup requirements...
 echo.
 
@@ -34,43 +34,42 @@ if not exist "src_fragments\part_01.pyfrag" (
 )
 if not exist "src_patches\v1_1_website_filters.pyfrag" (
     echo ERROR: v1.1 source patch is missing.
-    >>"%LOG%" echo ERROR: v1.1 source patch is missing.
     pause
     exit /b 9
 )
 if not exist "src_patches\v1_2_compact_ui.pyfrag" (
     echo ERROR: v1.2 compact UI source patch is missing.
-    >>"%LOG%" echo ERROR: v1.2 compact UI source patch is missing.
     pause
     exit /b 9
 )
 if not exist "src_patches\v1_3a_theme_style.pyfrag" (
     echo ERROR: v1.3 theme patch is missing.
-    >>"%LOG%" echo ERROR: v1.3 theme patch is missing.
     pause
     exit /b 9
 )
 if not exist "src_patches\v1_3b_assets_layout.pyfrag" (
     echo ERROR: v1.3 layout patch is missing.
-    >>"%LOG%" echo ERROR: v1.3 layout patch is missing.
     pause
     exit /b 9
 )
 if not exist "src_patches\v1_3c_scroll_dashboard.pyfrag" (
     echo ERROR: v1.3 dashboard patch is missing.
-    >>"%LOG%" echo ERROR: v1.3 dashboard patch is missing.
     pause
     exit /b 9
 )
 if not exist "src_patches\v1_3z_assign.pyfrag" (
     echo ERROR: v1.3 assignment patch is missing.
-    >>"%LOG%" echo ERROR: v1.3 assignment patch is missing.
+    pause
+    exit /b 9
+)
+if not exist "src_patches\v1_4_1_compact_cleanup.pyfrag" (
+    echo ERROR: v1.4.1 compact cleanup patch is missing.
+    >>"%LOG%" echo ERROR: v1.4.1 compact cleanup patch is missing.
     pause
     exit /b 9
 )
 if not exist "requirements.txt" (
     echo ERROR: requirements.txt is missing.
-    >>"%LOG%" echo ERROR: requirements.txt is missing.
     pause
     exit /b 9
 )
@@ -92,7 +91,6 @@ if not defined PY_CMD (
 %PY_CMD% -c "import tkinter; print('Tkinter OK', tkinter.TkVersion)" >>"%LOG%" 2>&1
 if errorlevel 1 (
     echo ERROR: Tkinter is unavailable.
-    >>"%LOG%" echo ERROR: Tkinter is unavailable.
     pause
     exit /b 11
 )
@@ -108,15 +106,13 @@ if errorlevel 1 (
 %PY_CMD% -m py_compile "rice2k_macro_studio.py" >>"%LOG%" 2>&1
 if errorlevel 1 (
     echo ERROR: Source loader failed compile check.
-    >>"%LOG%" echo ERROR: Source loader failed compile check.
     pause
     exit /b 12
 )
 
-%PY_CMD% -c "from pathlib import Path; p=Path('src_fragments'); parts=sorted(p.glob('part_*.pyfrag')); assert len(parts)==14, f'Expected 14 source fragments, found {len(parts)}'; s=''.join(x.read_text(encoding='utf-8') for x in parts); marker='\nif __name__ == \"__main__\":\n    main()'; assert marker in s, 'main marker missing'; patches=sorted(Path('src_patches').glob('*.pyfrag')); assert len(patches)>=6, f'Expected at least 6 version patches, found {len(patches)}'; patch='\n\n'.join(x.read_text(encoding='utf-8') for x in patches); s=s.replace(marker,'\n\n'+patch+'\n\n'+marker,1); compile(s,'rice2k_macro_studio_full.py','exec'); print('Full patched application source OK')" >>"%LOG%" 2>&1
+%PY_CMD% -c "from pathlib import Path; p=Path('src_fragments'); parts=sorted(p.glob('part_*.pyfrag')); assert len(parts)==14, f'Expected 14 source fragments, found {len(parts)}'; s=''.join(x.read_text(encoding='utf-8') for x in parts); marker='\nif __name__ == \"__main__\":\n    main()'; assert marker in s, 'main marker missing'; patches=sorted(Path('src_patches').glob('*.pyfrag')); assert len(patches)>=7, f'Expected at least 7 version patches, found {len(patches)}'; patch='\n\n'.join(x.read_text(encoding='utf-8') for x in patches); s=s.replace(marker,'\n\n'+patch+'\n\n'+marker,1); compile(s,'rice2k_macro_studio_full.py','exec'); print('Full patched application source OK')" >>"%LOG%" 2>&1
 if errorlevel 1 (
     echo ERROR: Reconstructed application source failed validation.
-    >>"%LOG%" echo ERROR: Reconstructed application source failed validation.
     pause
     exit /b 13
 )
