@@ -1,0 +1,190 @@
+        elif self.engine.state in {STATE_RECORDING, STATE_RECORDING_PAUSED}:
+            self.stop_recording()
+
+    def confirm_playback(self):
+        if self.engine.state != STATE_IDLE:
+            return
+        if not self.engine.snapshot_actions():
+            messagebox.showwarning("No Recording", "Load or record something first.")
+            return
+        self.save_vars()
+        checks = self.engine.preflight()
+        failures = [c for c in checks if not c[1]]
+        if failures:
+            details = "\n".join(f"- {name}: {detail}" for name, _, detail in failures)
+            if not messagebox.askyesno("Pre-flight Warnings", f"Some checks need attention:\n\n{details}\n\nContinue anyway?"):
+                return
+        counts = self.counts()
+        msg = f"Mode: {self.mode_var.get()}\nActions: {counts['total']} (click={counts['click']}, scroll={counts['scroll']}, move={counts['move']}, key={counts['key']})\nRepeat: {self.repeat_var.get()}\nDelay: {self.delay_var.get()} sec\nSpeed: {self.speed_var.get():.1f}x\nTarget validation: {'ON' if self.target_validation_var.get() else 'OFF'}\n\nStart playback?"
+        if messagebox.askyesno("Confirm Playback", msg):
+            self.start_playback()
+
+    def start_playback(self):
+        if self.engine.state != STATE_IDLE:
+            return
+        self.save_vars()
+        def worker():
+            try:
+                self.engine.playback(update_callback=self.update_run)
+            except Exception as exc:
+                log_error("playback", exc, json.dumps(self.settings, default=str))
+                self.after(0, lambda: messagebox.showerror("Playback Error", f"{exc}\n\nDetails saved to error_log.txt"))
+        self.play_thread = threading.Thread(target=worker, daemon=True)
+        self.play_thread.start()
+
+    def run_preflight(self):
+        self.save_vars()
+        checks = self.engine.preflight()
+        good = sum(1 for _, ok, _ in checks if ok)
+        total = len(checks)
+        self.preflight_var.set(f"{good}/{total} checks passed")
+        text = "\n".join(("PASS" if ok else "WARN") + f" - {name}: {detail}" for name, ok, detail in checks)
+        messagebox.showinfo("Pre-flight Results", text)
+
+    def auto_run_last(self):
+        last = self.settings.get("last_recording")
+        if last and Path(last).exists() and self.load_path(last):
+            self.confirm_playback()
+
+    def load_path(self, path):
+        try:
+            data = self.engine.load_recording(path)
+            self.browser_capture_actions = list(data.get("browser_capture_actions", [])) if isinstance(data, dict) else []
+            self.settings["last_recording"] = str(path)
+            self.loaded_file_var.set(str(path))
+            save_settings(self.settings)
+            self.action_count_var.set(self.counts_text())
+            return True
+        except Exception as exc:
+            log_error("load_recording", exc, str(path))
+            messagebox.showerror("Load Error", f"{exc}\n\nDetails saved to error_log.txt")
+            return False
+
+    def show_floating(self):
+        if self.floating and self.floating.winfo_exists():
+            return
+        self.floating = tk.Toplevel(self)
+        self.floating.title("Recording")
+        self.floating.geometry("470x105+40+40")
+        self.floating.attributes("-topmost", True)
+        self.floating.configure(bg=self.colors()["panel"])
+        self.floating.resizable(False, False)
+        self.floating_label = ttk.Label(self.floating, text="Recording 00:00", style="Panel.TLabel", font=("Segoe UI", 10, "bold"))
+        self.floating_label.pack(anchor="w", padx=10, pady=(8, 2))
+        row = ttk.Frame(self.floating, style="Panel.TFrame")
+        row.pack(fill="x", padx=8, pady=4)
+        ttk.Button(row, text="Pause / Resume", command=self.pause_resume).pack(side="left", padx=3)
+        ttk.Button(row, text="Stop + Save", command=self.stop_recording).pack(side="left", padx=3)
+        ttk.Button(row, text="Show Main", command=lambda: (self.deiconify(), self.lift(), self.update_app_regions())).pack(side="left", padx=3)
+        self.after(150, self.update_app_regions)
+
+    def hide_floating(self):
+        if self.floating and self.floating.winfo_exists():
+            self.floating.destroy()
+        self.floating = None
+        self.update_app_regions()
+
+    def update_app_regions(self):
+        regions = []
+        for w in [self, self.floating]:
+            if w and w.winfo_exists():
+                try:
+                    if w.state() in {"withdrawn", "iconic"}: continue
+                    w.update_idletasks()
+                    left, top = w.winfo_rootx(), w.winfo_rooty()
+                    regions.append((left, top, left + w.winfo_width(), top + w.winfo_height()))
+                except Exception: pass
+        self.engine.set_app_regions(regions)
+
+    def _timer_tick(self):
+        if self.engine.state not in {STATE_RECORDING, STATE_RECORDING_PAUSED}:
+            return
+        elapsed = int(time.time() - (self.record_start_time or time.time()))
+        m, s = divmod(elapsed, 60)
+        self.elapsed_var.set(f"{m:02d}:{s:02d}")
+        self.action_count_var.set(self.counts_text())
+        if self.floating_label and self.floating_label.winfo_exists():
+            c = self.counts()
+            label = "Paused" if self.engine.state == STATE_RECORDING_PAUSED else "Recording"
+            self.floating_label.config(text=f"{label} {m:02d}:{s:02d} | Click {c['click']} | Scroll {c['scroll']} | Keys {c['key']}")
+        self.timer_job = self.after(250, self._timer_tick)
+
+    def counts(self):
+        actions = self.engine.snapshot_actions()
+        return {
+            "total": len(actions),
+            "click": sum(1 for a in actions if a.get("type") == "click"),
+            "scroll": sum(1 for a in actions if a.get("type") == "scroll"),
+            "move": sum(1 for a in actions if a.get("type") == "move"),
+            "key": sum(1 for a in actions if a.get("type") == "key"),
+        }
+
+    def counts_text(self):
+        c = self.counts()
+        return f"Actions {c['total']} | Click {c['click']} | Scroll {c['scroll']} | Move {c['move']} | Key {c['key']}"
+
+    def update_run(self, idx, total):
+        self.after(0, lambda: self.playback_var.set(f"Run {idx}/{total}"))
+
+    def set_status(self, text):
+        self.after(0, lambda: self.status_var.set(text))
+
+    def add_log(self, text):
+        line = f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {text}"
+        self.log_lines.append(line)
+        self.log_queue.put(line)
+
+    def _drain_log_queue(self):
+        try:
+            while True:
+                self.log_queue.get_nowait()
+        except queue.Empty:
+            pass
+        if hasattr(self, "speed_label") and self.speed_label.winfo_exists():
+            self.speed_label.config(text=f"{self.speed_var.get():.1f}x")
+        self.after(150, self._drain_log_queue)
+
+    def on_close(self):
+        try:
+            if self.engine.state in {STATE_RECORDING, STATE_RECORDING_PAUSED}:
+                self.engine.stop_recording()
+            elif self.engine.state in {STATE_PLAYING, STATE_PLAYING_PAUSED}:
+                self.engine.stop_playback()
+            self.save_vars()
+            if self.log_lines:
+                (LOGS_DIR / f"session_{now_stamp()}.txt").write_text("\n".join(self.log_lines), encoding="utf-8")
+        except Exception as exc:
+            log_error("on_close", exc)
+        self.destroy()
+
+
+def main():
+    install_global_error_logger()
+    write_startup_event("Python application entry")
+    try:
+        ensure_folders()
+        enable_dpi_awareness()
+        write_startup_event("Folders/DPI setup complete")
+        app = MouseRecorderApp()
+        write_startup_event("GUI initialized successfully")
+        app.mainloop()
+        write_startup_event("GUI closed normally")
+    except Exception as exc:
+        log_error("startup_or_mainloop", exc)
+        write_startup_event(f"FATAL STARTUP ERROR: {type(exc).__name__}: {exc}")
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror(
+                "Rice2k Macro Studio Could Not Start",
+                f"{exc}\n\nNormal error log:\n{ERROR_LOG_FILE}\n\n"
+                f"Fallback error log:\n{FALLBACK_ERROR_LOG_FILE}"
+            )
+            root.destroy()
+        except Exception:
+            pass
+        raise
+
+
+if __name__ == "__main__":
+    main()
