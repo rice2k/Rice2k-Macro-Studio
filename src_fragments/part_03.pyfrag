@@ -1,0 +1,300 @@
+    """Try semantic UI Automation activation before falling back to physical coordinates."""
+    if Desktop is None or not sys.platform.startswith("win"):
+        return False
+
+    root = resolve_uia_root(action)
+    if root is None:
+        return False
+
+    name = action.get("control_name", "") or ""
+    ctype = action.get("control_type", "") or ""
+    aid = action.get("automation_id", "") or ""
+    cls = action.get("control_class", "") or ""
+    dynamic_today = action.get("dynamic_rule") == "today"
+
+    try:
+        candidates = root.descendants()
+        scored = []
+        exact_day_candidates = []
+        today_day = str(datetime.date.today().day)
+
+        for wrapper in candidates:
+            info = getattr(wrapper, "element_info", None)
+            if not info:
+                continue
+
+            current_name = getattr(info, "name", "") or ""
+            current_type = getattr(info, "control_type", "") or ""
+            current_aid = getattr(info, "automation_id", "") or ""
+            current_class = getattr(info, "class_name", "") or ""
+            score = 0
+
+            if dynamic_today:
+                score = _today_candidate_score(info, action)
+                # Safe fallback: use a bare day number only when it is unique among compatible controls.
+                if current_name.strip() == today_day and (not ctype or current_type == ctype):
+                    exact_day_candidates.append(wrapper)
+            else:
+                if aid and current_aid == aid:
+                    score += 10
+                if name and current_name == name:
+                    score += 8
+                if ctype and current_type == ctype:
+                    score += 3
+                if cls and current_class == cls:
+                    score += 2
+
+            if score:
+                scored.append((score, wrapper))
+
+        if dynamic_today and not scored and len(exact_day_candidates) == 1:
+            scored.append((10, exact_day_candidates[0]))
+
+        if not scored:
+            return False
+
+        scored.sort(key=lambda item: item[0], reverse=True)
+        wrapper = scored[0][1]
+
+        # Prefer semantic patterns. Avoid physical click_input here.
+        for method_name in ("invoke", "select", "toggle"):
+            method = getattr(wrapper, method_name, None)
+            if callable(method):
+                try:
+                    method()
+                    return True
+                except Exception:
+                    continue
+
+        # Some wrappers expose click() as an invoke-like wrapper method.
+        method = getattr(wrapper, "click", None)
+        if callable(method):
+            try:
+                method()
+                return True
+            except Exception:
+                pass
+
+    except Exception:
+        return False
+
+    return False
+
+
+class Tooltip:
+    """Small delayed hover hint for Tk/ttk controls."""
+    def __init__(self, widget, text, delay=450, wraplength=360):
+        self.widget = widget
+        self.text = text
+        self.delay = delay
+        self.wraplength = wraplength
+        self.tip = None
+        self.job = None
+        widget.bind("<Enter>", self._schedule, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<ButtonPress>", self._hide, add="+")
+
+    def _schedule(self, _event=None):
+        self._cancel()
+        try:
+            self.job = self.widget.after(self.delay, self._show)
+        except Exception:
+            self.job = None
+
+    def _cancel(self):
+        if self.job:
+            try:
+                self.widget.after_cancel(self.job)
+            except Exception:
+                pass
+            self.job = None
+
+    def _show(self):
+        if self.tip or not self.text:
+            return
+        try:
+            x = self.widget.winfo_rootx() + 16
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 8
+            self.tip = tk.Toplevel(self.widget)
+            self.tip.wm_overrideredirect(True)
+            self.tip.wm_geometry(f"+{x}+{y}")
+            top = self.widget.winfo_toplevel()
+            colors = top.colors() if hasattr(top, "colors") else THEMES["dark"]
+            label = tk.Label(
+                self.tip, text=self.text, justify="left",
+                background=colors["panel"], foreground=colors["text"],
+                relief="solid", borderwidth=1, padx=9, pady=6,
+                font=("Segoe UI", 9), wraplength=self.wraplength
+            )
+            label.pack()
+        except Exception:
+            self.tip = None
+
+    def _hide(self, _event=None):
+        self._cancel()
+        if self.tip:
+            try:
+                self.tip.destroy()
+            except Exception:
+                pass
+            self.tip = None
+
+
+def attach_tooltip(widget, text):
+    """Attach a hover description and return the widget for convenient construction."""
+    Tooltip(widget, text)
+    return widget
+
+
+@dataclass
+class RecordedAction:
+    type: str
+    time_from_start: float
+    time_since_last: float
+    x: int = 0
+    y: int = 0
+    dx: int = 0
+    dy: int = 0
+    button: str = ""
+    pressed: bool = False
+    key: str = ""
+    key_kind: str = ""
+    window_title: str = ""
+    process_name: str = ""
+    pid: int = 0
+    hwnd: int = 0
+    window_rect: object = None
+    virtual_left: int = 0
+    virtual_top: int = 0
+    virtual_width: int = 0
+    virtual_height: int = 0
+    monitor_name: str = ""
+    monitor_bounds: object = None
+    dpi: int = 96
+    control_name: str = ""
+    control_type: str = ""
+    automation_id: str = ""
+    control_class: str = ""
+    framework_id: str = ""
+    dynamic_rule: str = ""
+
+
+
+def simple_semantic_click_press_indices(actions):
+    """Return raw action indexes that are simple left-clicks, excluding drags/right-clicks."""
+    safe = set()
+    for i in range(len(actions) - 1):
+        a = actions[i]
+        b = actions[i + 1]
+        if (
+            a.get("type") == "click" and a.get("pressed") is True
+            and (a.get("button") or "left") == "left"
+            and b.get("type") == "click" and b.get("pressed") is False
+            and (b.get("button") or "left") == "left"
+            and abs(int(b.get("x", 0)) - int(a.get("x", 0))) <= 3
+            and abs(int(b.get("y", 0)) - int(a.get("y", 0))) <= 3
+        ):
+            safe.add(i)
+    return safe
+
+
+class RecorderEngine:
+    def __init__(self, status_callback=None, log_callback=None):
+        self.status_callback = status_callback or (lambda text: None)
+        self.log_callback = log_callback or (lambda text: None)
+        self.actions = []
+        self.state = STATE_IDLE
+        self.action_lock = threading.RLock()
+        self.stop_event = threading.Event()
+        self.pause_event = threading.Event()
+        self.mouse_listener = None
+        self.keyboard_listener = None
+        self.start_time = 0.0
+        self.last_event_time = 0.0
+        self.current_file = None
+        self.app_regions = []
+        self.settings = DEFAULT_SETTINGS.copy()
+        self.last_window = active_window_info()
+        self.held_keys = set()
+        self.held_buttons = set()
+        self.semantic_release_skip = set()
+        self.hotkey_names = set()
+
+    def configure(self, settings):
+        self.settings = settings.copy()
+        self.hotkey_names = {
+            str(settings.get("hotkey_start", "f8")).lower(),
+            str(settings.get("hotkey_stop", "f9")).lower(),
+            str(settings.get("hotkey_pause", "f10")).lower(),
+            str(settings.get("hotkey_play", "f12")).lower(),
+            str(settings.get("hotkey_emergency", "esc")).lower(),
+        }
+
+    def set_app_regions(self, regions):
+        self.app_regions = regions or []
+
+    def _in_app_region(self, x, y):
+        return any(left <= x <= right and top <= y <= bottom for left, top, right, bottom in self.app_regions)
+
+    def _record_allowed(self):
+        return self.state == STATE_RECORDING
+
+    def _window_info(self, refresh=False):
+        if refresh:
+            self.last_window = active_window_info()
+        return self.last_window
+
+    def _append(self, action):
+        with self.action_lock:
+            self.actions.append(action)
+        self.last_event_time = time.time()
+        try:
+            with RECOVERY_JOURNAL.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(action, ensure_ascii=False) + "\n")
+        except Exception as exc:
+            log_error("recovery_journal_append", exc)
+
+    def snapshot_actions(self):
+        with self.action_lock:
+            return [dict(a) for a in self.actions]
+
+    def start_recording(self):
+        if self.state != STATE_IDLE:
+            raise RuntimeError(f"Cannot start recording while state is {self.state}.")
+        want_mouse_clicks = bool(self.settings.get("record_mouse"))
+        want_scroll = bool(self.settings.get("record_scroll", True))
+        want_moves = bool(self.settings.get("record_mouse_moves"))
+        want_keyboard = bool(self.settings.get("record_keyboard"))
+        want_mouse_listener = want_mouse_clicks or want_scroll or want_moves
+
+        if not want_mouse_listener and not want_keyboard:
+            raise RuntimeError("Enable Mouse clicks, Scroll wheel, Mouse movement path, Keyboard, or a combination.")
+        if want_mouse_listener and mouse is None:
+            raise RuntimeError("Mouse/scroll recording requires pynput.")
+        if want_keyboard and keyboard is None:
+            raise RuntimeError("Keyboard recording requires pynput.")
+
+        self.actions = []
+        self.stop_event.clear()
+        self.pause_event.clear()
+        self.state = STATE_RECORDING
+        self.start_time = time.time()
+        self.last_event_time = self.start_time
+        self.last_window = active_window_info()
+        ensure_folders()
+        try:
+            RECOVERY_JOURNAL.write_text("", encoding="utf-8")
+        except Exception as exc:
+            log_error("recovery_journal_start", exc)
+        virtual = get_virtual_screen_bounds()
+        debug = bool(self.settings.get("debug_logging"))
+
+        def make_action(action_type, **kwargs):
+            now = time.time()
+            wi = self._window_info(refresh=action_type in {"click", "key", "scroll"})
+            px = int(kwargs.get("x", 0) or 0)
+            py = int(kwargs.get("y", 0) or 0)
+            if action_type == "key" and wi.get("rect"):
+                r = wi["rect"]
+                px = int((r[0] + r[2]) / 2)
+                py = int((r[1] + r[3]) / 2)
