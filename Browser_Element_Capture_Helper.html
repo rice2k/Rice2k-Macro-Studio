@@ -7,45 +7,108 @@
 :root{color-scheme:dark}
 body{font-family:Segoe UI,Arial,sans-serif;margin:24px;line-height:1.5;background:#0B1220;color:#EAF0F7}
 .card{background:#111C2E;border:1px solid #26364D;border-radius:12px;padding:16px;margin:12px 0}
-button{font:inherit;padding:10px 14px;border:0;border-radius:8px;background:#4DA3FF;color:#fff;font-weight:700;cursor:pointer}
+button{font:inherit;padding:9px 12px;border:0;border-radius:8px;background:#4DA3FF;color:#fff;font-weight:700;cursor:pointer;margin:2px}
 a{color:#66D9C9;font-weight:700}
 code{background:#0A1322;padding:2px 6px;border-radius:5px}
 .small{color:#94A3B8;font-size:14px}
+.warn{color:#F6C85F}
 </style>
 </head>
 <body>
-<h1>Browser Smart Target Capture</h1>
+<h1>Rice2k Macro Studio - Browser Smart Target Capture</h1>
 <div class="card">
-<p>This helper records semantic website targets instead of only mouse coordinates.</p>
-<p>It captures URL, page title, event type, tag, role, visible text, accessible labels, ID/name/type, selector, XPath, and date metadata.</p>
-<p><strong>It does not store typed field values.</strong> Password-related metadata is redacted.</p>
+<p>Generate the bookmarklet, add it to Edge/Chrome, then start it on a website you want to record.</p>
+<p>Website recording can be filtered to <strong>clicks, scroll, click location, non-sensitive input, and selections</strong>.</p>
+<p class="warn"><strong>Privacy:</strong> text-input capture is opt-in. Password, token, secret, OTP, CVV, PIN, authentication, and similar security fields are always blocked/redacted.</p>
 </div>
 <div class="card">
 <button id="make">Generate Capture Bookmarklet</button>
-<p>After generating it, drag this link to your browser bookmarks bar:</p>
+<p>Drag the generated link to your browser bookmarks bar:</p>
 <p id="out"></p>
 </div>
 <div class="card">
-<h2>Calendar: always choose the current date</h2>
-<p>After starting capture on the website, click <strong>Mark Next = TODAY</strong> in the floating capture panel, then click the calendar date you want to represent “today.”</p>
-<p>On replay, the helper searches for today's date using <code>aria-current="date"</code>, <code>data-date</code>, <code>datetime</code>, accessible labels, and a calendar-scoped day-number fallback.</p>
+<h2>Calendar TODAY</h2>
+<p>During capture, choose <strong>Mark Next = TODAY</strong>, then click the calendar date that should always mean the current date.</p>
 </div>
+
 <script>
+const DEFAULT_FILTERS = {"clicks":true,"scroll":true,"location":true,"input":false,"selection":true};
+
 document.getElementById('make').addEventListener('click',()=>{
 const js=`javascript:(()=> {
 if(window.__rice2kMacroStudio){alert('Rice2k Macro Studio capture is already running');return;}
 window.__rice2kMacroStudio=true;
+
 const data=[];
 let markNextToday=false;
 let replaying=false;
+let filters=${JSON.stringify(DEFAULT_FILTERS)};
+let scrollTimer=null;
+const inputTimers=new WeakMap();
+
 const panel=document.createElement('div');
-panel.style='position:fixed;right:10px;bottom:10px;z-index:2147483647;background:#0B1220;color:#EAF0F7;border:2px solid #4DA3FF;border-radius:10px;padding:10px;width:410px;max-height:500px;overflow:auto;font:12px Segoe UI,Arial;box-shadow:0 8px 28px rgba(0,0,0,.35)';
-panel.innerHTML='<b>Rice2k Macro Studio Smart Capture v1.0</b><br><button id="mrpToday">Mark Next = TODAY</button> <button id="mrpReplay">Replay Captured</button> <button id="mrpCopy">Copy JSON</button> <button id="mrpDownload">Download JSON</button> <button id="mrpStop">Stop</button><div id="mrpStatus" style="margin:7px 0;color:#66D9C9">Ready</div><pre id="mrpOut" style="white-space:pre-wrap;max-height:290px;overflow:auto;background:#111C2E;padding:6px;border-radius:6px"></pre>';
+panel.style='position:fixed;right:10px;bottom:10px;z-index:2147483647;background:#0B1220;color:#EAF0F7;border:2px solid #4DA3FF;border-radius:10px;padding:10px;width:480px;max-height:620px;overflow:auto;font:12px Segoe UI,Arial;box-shadow:0 8px 28px rgba(0,0,0,.35)';
+panel.innerHTML=\`
+<div style="font-size:14px;font-weight:700;margin-bottom:6px">Rice2k Macro Studio Smart Capture v1.1</div>
+<div style="background:#111C2E;border-radius:7px;padding:7px;margin-bottom:7px">
+  <b>Record:</b><br>
+  <label><input id="r2kClicks" type="checkbox"> Clicks</label>
+  <label style="margin-left:8px"><input id="r2kScroll" type="checkbox"> Scroll</label>
+  <label style="margin-left:8px"><input id="r2kLocation" type="checkbox"> Click location</label><br>
+  <label><input id="r2kInput" type="checkbox"> Text input</label>
+  <label style="margin-left:8px"><input id="r2kSelection" type="checkbox"> Selections</label>
+  <div style="color:#F6C85F;margin-top:5px">Sensitive password/security fields are never recorded.</div>
+</div>
+<div style="margin-bottom:7px">
+  <button id="r2kAll">All Safe</button>
+  <button id="r2kClicksOnly">Clicks Only</button>
+  <button id="r2kClickLocation">Click + Location</button>
+  <button id="r2kScrollOnly">Scroll Only</button>
+  <button id="r2kInputOnly">Input Only</button>
+  <button id="r2kSelectionOnly">Selection Only</button>
+</div>
+<div style="margin-bottom:7px">
+  <button id="r2kToday">Mark Next = TODAY</button>
+  <button id="r2kReplay">Replay Captured</button>
+  <button id="r2kCopy">Copy JSON</button>
+  <button id="r2kDownload">Download JSON</button>
+  <button id="r2kClear">Clear</button>
+  <button id="r2kStop">Stop</button>
+</div>
+<div id="r2kStatus" style="margin:7px 0;color:#66D9C9">Ready</div>
+<pre id="r2kOut" style="white-space:pre-wrap;max-height:270px;overflow:auto;background:#111C2E;padding:6px;border-radius:6px"></pre>\`;
 document.body.appendChild(panel);
-const out=panel.querySelector('#mrpOut');
-const status=panel.querySelector('#mrpStatus');
+
+const out=panel.querySelector('#r2kOut');
+const status=panel.querySelector('#r2kStatus');
+const controlIds={
+  clicks:'#r2kClicks',scroll:'#r2kScroll',location:'#r2kLocation',
+  input:'#r2kInput',selection:'#r2kSelection'
+};
+
+function syncControls(){
+  Object.entries(controlIds).forEach(([k,s])=>{const el=panel.querySelector(s);if(el)el.checked=!!filters[k];});
+}
+function pullControls(){
+  Object.entries(controlIds).forEach(([k,s])=>{const el=panel.querySelector(s);if(el)filters[k]=!!el.checked;});
+  status.textContent='Filters: '+Object.entries(filters).filter(x=>x[1]).map(x=>x[0]).join(', ');
+}
+function preset(name){
+  const p={
+    all_safe:{clicks:true,scroll:true,location:true,input:false,selection:true},
+    clicks_only:{clicks:true,scroll:false,location:false,input:false,selection:false},
+    click_location:{clicks:true,scroll:false,location:true,input:false,selection:false},
+    scroll_only:{clicks:false,scroll:true,location:false,input:false,selection:false},
+    input_only:{clicks:false,scroll:false,location:false,input:true,selection:false},
+    selection_only:{clicks:false,scroll:false,location:false,input:false,selection:true}
+  }[name];
+  if(p){filters={...p};syncControls();pullControls();}
+}
+syncControls();
+Object.values(controlIds).forEach(s=>panel.querySelector(s).addEventListener('change',pullControls));
 
 function css(el){
+  if(!el||el===document||el===window)return '';
   if(el.id)return '#'+CSS.escape(el.id);
   let parts=[];
   while(el&&el.nodeType===1&&parts.length<7){
@@ -71,7 +134,16 @@ function label(el){
 }
 function isSensitive(el){
   const type=(el.getAttribute('type')||'').toLowerCase();
-  return type==='password'||/password|passcode|secret/i.test(el.getAttribute('name')||'');
+  const joined=[
+    type,
+    el.getAttribute('name')||'',
+    el.id||'',
+    el.getAttribute('autocomplete')||'',
+    el.getAttribute('aria-label')||'',
+    el.getAttribute('placeholder')||''
+  ].join(' ').toLowerCase();
+  if(type==='password')return true;
+  return /(password|passwd|passcode|secret|token|api.?key|auth|credential|otp|one.?time|verification.?code|cvv|cvc|pin|ssn|social.?security)/i.test(joined);
 }
 function todayISO(){
   const d=new Date(),p=n=>String(n).padStart(2,'0');
@@ -84,45 +156,110 @@ function strongToday(el){
   if((el.getAttribute('datetime')||'').slice(0,10)===iso)return true;
   return false;
 }
-function record(e,eventType){
-  if(replaying)return;
-  const el=e.target;
-  if(panel.contains(el))return;
-  const rawType=(el.getAttribute('type')||'').toLowerCase();
-  if(eventType==='click' && (
-    el.tagName==='SELECT' ||
-    (el.tagName==='INPUT' && ['checkbox','radio','date','month','week'].includes(rawType))
-  ))return;
+function baseRecord(el,eventType){
   const sensitive=isSensitive(el);
-  const selectedText=el.tagName==='SELECT'&&el.selectedOptions&&el.selectedOptions[0]?el.selectedOptions[0].text.trim():'';
-  const rec={
+  return {
     source:'browser',
-    eventType:eventType,
+    eventType,
     time:new Date().toISOString(),
     url:location.href,
     title:document.title,
-    tag:el.tagName,
-    role:el.getAttribute('role')||'',
-    text:sensitive?'[REDACTED]':((selectedText||el.innerText||el.getAttribute('alt')||'').trim().slice(0,220)),
-    ariaLabel:sensitive?'[REDACTED]':(el.getAttribute('aria-label')||''),
-    placeholder:sensitive?'[REDACTED]':(el.getAttribute('placeholder')||''),
-    label:sensitive?'[REDACTED]':label(el),
-    id:el.id||'',
-    name:sensitive?'[REDACTED]':(el.getAttribute('name')||''),
-    type:(el.getAttribute('type')||'').toLowerCase(),
-    checked:(el.type==='checkbox'||el.type==='radio')?!!el.checked:null,
+    tag:el&&el.tagName?el.tagName:'',
+    role:el&&el.getAttribute?el.getAttribute('role')||'':'',
+    text:sensitive?'[REDACTED]':((el&&(el.innerText||el.getAttribute?.('alt'))||'').trim().slice(0,220)),
+    ariaLabel:sensitive?'[REDACTED]':(el&&el.getAttribute?el.getAttribute('aria-label')||'':''),
+    placeholder:sensitive?'[REDACTED]':(el&&el.getAttribute?el.getAttribute('placeholder')||'':''),
+    label:sensitive?'[REDACTED]':(el&&el.getAttribute?label(el):''),
+    id:el&&el.id?el.id:'',
+    name:sensitive?'[REDACTED]':(el&&el.getAttribute?el.getAttribute('name')||'':''),
+    type:el&&el.getAttribute?(el.getAttribute('type')||'').toLowerCase():'',
     selector:css(el),
     xpath:xp(el),
-    ariaCurrent:el.getAttribute('aria-current')||'',
-    dataDate:el.getAttribute('data-date')||'',
-    dateTime:el.getAttribute('datetime')||'',
-    x:e.clientX||0,
-    y:e.clientY||0,
-    dynamicRule:(markNextToday||strongToday(el))?'today':''
+    ariaCurrent:el&&el.getAttribute?el.getAttribute('aria-current')||'':'',
+    dataDate:el&&el.getAttribute?el.getAttribute('data-date')||'':'',
+    dateTime:el&&el.getAttribute?el.getAttribute('datetime')||'':'',
+    dynamicRule:''
   };
-  if(markNextToday){markNextToday=false;status.textContent='TODAY rule captured';}
-  data.push(rec);out.textContent=JSON.stringify(data,null,2);
 }
+function push(rec){
+  data.push(rec);
+  out.textContent=JSON.stringify(data,null,2);
+  status.textContent='Captured '+data.length+' action'+(data.length===1?'':'s');
+}
+function handleClick(e){
+  if(replaying||panel.contains(e.target)||!filters.clicks)return;
+  const el=e.target;
+  const rawType=(el.getAttribute('type')||'').toLowerCase();
+  if(el.tagName==='SELECT'||(el.tagName==='INPUT'&&['checkbox','radio','date','month','week'].includes(rawType)))return;
+  const rec=baseRecord(el,'click');
+  if(filters.location){rec.x=e.clientX||0;rec.y=e.clientY||0;}
+  else{rec.x=null;rec.y=null;}
+  if(markNextToday||strongToday(el)){rec.dynamicRule='today';}
+  if(markNextToday){markNextToday=false;status.textContent='TODAY rule captured';}
+  push(rec);
+}
+function scrollTargetInfo(target){
+  if(target===document||target===document.documentElement||target===document.body||target===document.scrollingElement){
+    return {selector:'__window__',xpath:'',scrollTop:window.scrollY||document.documentElement.scrollTop||0,scrollLeft:window.scrollX||document.documentElement.scrollLeft||0};
+  }
+  return {selector:css(target),xpath:xp(target),scrollTop:target.scrollTop||0,scrollLeft:target.scrollLeft||0};
+}
+function handleScroll(e){
+  if(replaying||panel.contains(e.target)||!filters.scroll)return;
+  const target=e.target===document?document.scrollingElement:e.target;
+  clearTimeout(scrollTimer);
+  scrollTimer=setTimeout(()=>{
+    const pos=scrollTargetInfo(target);
+    push({
+      source:'browser',eventType:'scroll',time:new Date().toISOString(),url:location.href,title:document.title,
+      selector:pos.selector,xpath:pos.xpath,scrollTop:pos.scrollTop,scrollLeft:pos.scrollLeft,
+      tag:target&&target.tagName?target.tagName:'DOCUMENT',role:'',text:'',dynamicRule:''
+    });
+  },180);
+}
+function handleInput(e){
+  if(replaying||panel.contains(e.target)||!filters.input)return;
+  const el=e.target;
+  if(!el||!['INPUT','TEXTAREA'].includes(el.tagName))return;
+  const type=(el.getAttribute('type')||'text').toLowerCase();
+  if(['checkbox','radio','date','month','week','file','submit','button','reset'].includes(type))return;
+  if(isSensitive(el)){
+    status.textContent='Sensitive input blocked/redacted';
+    return;
+  }
+  if(inputTimers.has(el))clearTimeout(inputTimers.get(el));
+  const timer=setTimeout(()=>{
+    const rec=baseRecord(el,'input');
+    rec.value=String(el.value||'');
+    push(rec);
+    inputTimers.delete(el);
+  },350);
+  inputTimers.set(el,timer);
+}
+function handleSelection(e){
+  if(replaying||panel.contains(e.target)||!filters.selection)return;
+  const el=e.target;
+  if(!el)return;
+  const tag=el.tagName;
+  const type=(el.getAttribute('type')||'').toLowerCase();
+  if(tag==='SELECT'){
+    const rec=baseRecord(el,'selection');
+    const opt=el.selectedOptions&&el.selectedOptions[0];
+    rec.selectedText=opt?(opt.text||'').trim():'';
+    rec.selectedIndex=el.selectedIndex;
+    push(rec);
+  }else if(tag==='INPUT'&&(type==='checkbox'||type==='radio')){
+    const rec=baseRecord(el,'selection');
+    rec.checked=!!el.checked;
+    push(rec);
+  }else if(tag==='INPUT'&&['date','month','week'].includes(type)){
+    const rec=baseRecord(el,'selection');
+    if(markNextToday&&type==='date'){rec.dynamicRule='today';markNextToday=false;}
+    else if(!isSensitive(el)){rec.value=String(el.value||'');}
+    push(rec);
+  }
+}
+
 function byXPath(path){
   try{return document.evaluate(path,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue}catch(e){return null}
 }
@@ -131,22 +268,21 @@ function visible(el){
   const r=el.getBoundingClientRect(),s=getComputedStyle(el);
   return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none';
 }
-function findToday(){
-  const d=new Date(),p=n=>String(n).padStart(2,'0'),iso=todayISO();
-  const direct=[
-    '[aria-current="date"]',
-    '[data-date="'+iso+'"]',
-    '[datetime="'+iso+'"]',
-    'time[datetime^="'+iso+'"]'
-  ];
-  for(const s of direct){
-    const el=[...document.querySelectorAll(s)].find(visible);
-    if(el)return el;
+function findTarget(rec){
+  let el=null;
+  if(rec.selector&&rec.selector!=='__window__'){
+    try{el=document.querySelector(rec.selector)}catch(e){}
   }
+  if(!el&&rec.xpath)el=byXPath(rec.xpath);
+  return el;
+}
+function findToday(){
+  const d=new Date(),iso=todayISO();
+  const direct=['[aria-current="date"]','[data-date="'+iso+'"]','[datetime="'+iso+'"]','time[datetime^="'+iso+'"]'];
+  for(const s of direct){const el=[...document.querySelectorAll(s)].find(visible);if(el)return el;}
   const monthLong=d.toLocaleDateString(undefined,{month:'long'});
   const monthShort=d.toLocaleDateString(undefined,{month:'short'});
-  const day=String(d.getDate());
-  const year=String(d.getFullYear());
+  const day=String(d.getDate()),year=String(d.getFullYear());
   const candidates=[...document.querySelectorAll('[aria-label],[title],[role="gridcell"],button,td')].filter(visible);
   for(const el of candidates){
     const txt=(el.getAttribute('aria-label')||el.getAttribute('title')||el.textContent||'').trim();
@@ -162,74 +298,116 @@ function findToday(){
     if(todayControl)return todayControl;
   }
   for(const scope of scopes){
-    const dayMatches=[...scope.querySelectorAll('button,[role="gridcell"],td')].filter(el=>visible(el)&&(el.textContent||'').trim()===day);
-    if(dayMatches.length===1)return dayMatches[0];
+    const matches=[...scope.querySelectorAll('button,[role="gridcell"],td')].filter(el=>visible(el)&&(el.textContent||'').trim()===day);
+    if(matches.length===1)return matches[0];
   }
   return null;
+}
+function setNativeValue(el,value){
+  const proto=el instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
+  const desc=Object.getOwnPropertyDescriptor(proto,'value');
+  if(desc&&desc.set)desc.set.call(el,value);else el.value=value;
 }
 async function replay(){
   if(replaying)return;
   replaying=true;
   status.textContent='Replaying '+data.length+' actions...';
   try{
-  for(const rec of [...data]){
-    let el=null;
-    if(rec.dynamicRule==='today'){
-      el=findToday();
-      if(!el){status.textContent='Could not find TODAY on the current calendar';return;}
-    }else{
-      try{if(rec.selector)el=document.querySelector(rec.selector)}catch(e){}
-      if(!el&&rec.xpath)el=byXPath(rec.xpath);
-    }
-    if(!el||!visible(el)){status.textContent='Target not found: '+(rec.text||rec.selector||rec.tag);return;}
-    el.scrollIntoView({block:'center',inline:'center'});
-    await new Promise(r=>setTimeout(r,80));
-    if(rec.eventType==='change'&&el.tagName==='SELECT'){
-      const options=[...el.options];
-      const match=options.find(o=>(o.text||'').trim()===rec.text);
-      if(match){el.selectedIndex=options.indexOf(match);}
-      el.dispatchEvent(new Event('input',{bubbles:true}));
-      el.dispatchEvent(new Event('change',{bubbles:true}));
-    }else if(rec.eventType==='change'&&el.tagName==='INPUT'&&(rec.type==='checkbox'||rec.type==='radio')){
-      if(typeof rec.checked==='boolean' && el.checked!==rec.checked){
-        el.click();
-      }else{
-        el.dispatchEvent(new Event('change',{bubbles:true}));
+    for(const rec of [...data]){
+      if(rec.eventType==='scroll'){
+        if(rec.selector==='__window__')window.scrollTo(rec.scrollLeft||0,rec.scrollTop||0);
+        else{
+          const el=findTarget(rec);
+          if(!el){status.textContent='Scroll target not found';return;}
+          el.scrollTo(rec.scrollLeft||0,rec.scrollTop||0);
+        }
+        await new Promise(r=>setTimeout(r,120));
+        continue;
       }
-    }else if(rec.eventType==='change'&&el.tagName==='INPUT'&&rec.type==='date'&&rec.dynamicRule==='today'){
-      el.value=todayISO();
-      el.dispatchEvent(new Event('input',{bubbles:true}));
-      el.dispatchEvent(new Event('change',{bubbles:true}));
-    }else{
-      el.click();
+
+      let el=rec.dynamicRule==='today'?findToday():findTarget(rec);
+      if(rec.eventType==='selection'&&rec.tag==='INPUT'&&rec.type==='date'&&rec.dynamicRule==='today'){
+        el=findTarget(rec);
+      }
+      if(!el||!visible(el)){status.textContent='Target not found: '+(rec.text||rec.selector||rec.tag);return;}
+      el.scrollIntoView({block:'center',inline:'center'});
+      await new Promise(r=>setTimeout(r,80));
+
+      if(rec.eventType==='input'){
+        if(isSensitive(el)){status.textContent='Sensitive input replay blocked';return;}
+        setNativeValue(el,String(rec.value||''));
+        el.dispatchEvent(new Event('input',{bubbles:true}));
+        el.dispatchEvent(new Event('change',{bubbles:true}));
+      }else if(rec.eventType==='selection'&&el.tagName==='SELECT'){
+        const opts=[...el.options];
+        let match=opts.find(o=>(o.text||'').trim()===rec.selectedText);
+        if(!match&&Number.isInteger(rec.selectedIndex))match=opts[rec.selectedIndex];
+        if(match)el.selectedIndex=opts.indexOf(match);
+        el.dispatchEvent(new Event('input',{bubbles:true}));
+        el.dispatchEvent(new Event('change',{bubbles:true}));
+      }else if(rec.eventType==='selection'&&el.tagName==='INPUT'&&(rec.type==='checkbox'||rec.type==='radio')){
+        if(typeof rec.checked==='boolean'&&el.checked!==rec.checked)el.click();
+        else el.dispatchEvent(new Event('change',{bubbles:true}));
+      }else if(rec.eventType==='selection'&&el.tagName==='INPUT'&&rec.type==='date'&&rec.dynamicRule==='today'){
+        setNativeValue(el,todayISO());
+        el.dispatchEvent(new Event('input',{bubbles:true}));
+        el.dispatchEvent(new Event('change',{bubbles:true}));
+      }else if(rec.eventType==='selection'&&el.tagName==='INPUT'&&['date','month','week'].includes(rec.type)){
+        if(!isSensitive(el)){
+          setNativeValue(el,String(rec.value||''));
+          el.dispatchEvent(new Event('input',{bubbles:true}));
+          el.dispatchEvent(new Event('change',{bubbles:true}));
+        }
+      }else{
+        el.click();
+      }
+      await new Promise(r=>setTimeout(r,120));
     }
-    await new Promise(r=>setTimeout(r,120));
-  }
-  status.textContent='Replay complete';
-  } finally {
-    replaying=false;
-  }
+    status.textContent='Replay complete';
+  }finally{replaying=false;}
 }
-const clickHandler=e=>record(e,'click');
-const changeHandler=e=>record(e,'change');
+
+const clickHandler=e=>handleClick(e);
+const scrollHandler=e=>handleScroll(e);
+const inputHandler=e=>handleInput(e);
+const changeHandler=e=>handleSelection(e);
+
 document.addEventListener('click',clickHandler,true);
+document.addEventListener('scroll',scrollHandler,true);
+document.addEventListener('input',inputHandler,true);
 document.addEventListener('change',changeHandler,true);
-panel.querySelector('#mrpToday').onclick=()=>{markNextToday=true;status.textContent='Next website target will be stored as TODAY';};
-panel.querySelector('#mrpReplay').onclick=replay;
-panel.querySelector('#mrpCopy').onclick=()=>navigator.clipboard&&navigator.clipboard.writeText(JSON.stringify(data,null,2));
-panel.querySelector('#mrpDownload').onclick=()=>{
+
+panel.querySelector('#r2kAll').onclick=()=>preset('all_safe');
+panel.querySelector('#r2kClicksOnly').onclick=()=>preset('clicks_only');
+panel.querySelector('#r2kClickLocation').onclick=()=>preset('click_location');
+panel.querySelector('#r2kScrollOnly').onclick=()=>preset('scroll_only');
+panel.querySelector('#r2kInputOnly').onclick=()=>preset('input_only');
+panel.querySelector('#r2kSelectionOnly').onclick=()=>preset('selection_only');
+panel.querySelector('#r2kToday').onclick=()=>{markNextToday=true;status.textContent='Next date target will be stored as TODAY';};
+panel.querySelector('#r2kReplay').onclick=replay;
+panel.querySelector('#r2kCopy').onclick=()=>navigator.clipboard&&navigator.clipboard.writeText(JSON.stringify(data,null,2));
+panel.querySelector('#r2kDownload').onclick=()=>{
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='rice2k_macro_capture_'+todayISO()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 };
-panel.querySelector('#mrpStop').onclick=()=>{
+panel.querySelector('#r2kClear').onclick=()=>{data.length=0;out.textContent='';status.textContent='Capture cleared';};
+panel.querySelector('#r2kStop').onclick=()=>{
   document.removeEventListener('click',clickHandler,true);
+  document.removeEventListener('scroll',scrollHandler,true);
+  document.removeEventListener('input',inputHandler,true);
   document.removeEventListener('change',changeHandler,true);
+  if(scrollTimer)clearTimeout(scrollTimer);
   panel.remove();window.__rice2kMacroStudio=false;
 };
+pullControls();
 })();`;
+
 const a=document.createElement('a');
-a.href=js;a.textContent='Rice2k Macro Studio Smart Capture';
-const out=document.getElementById('out');out.innerHTML='';out.appendChild(a);
+a.href=js;
+a.textContent='Rice2k Macro Studio Smart Capture';
+const out=document.getElementById('out');
+out.innerHTML='';
+out.appendChild(a);
 });
 </script>
 </body>
