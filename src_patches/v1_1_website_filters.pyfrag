@@ -1,0 +1,163 @@
+# Rice2k Macro Studio v1.1 - Website Recording Filters patch.
+APP_VERSION = "1.1 Website Recording Filters"
+
+DEFAULT_SETTINGS.update({
+    "website_record_clicks": True,
+    "website_record_scroll": True,
+    "website_record_click_location": True,
+    "website_record_input": False,
+    "website_record_selection": True,
+})
+
+_r2k_base_sanitize = sanitize_settings
+def sanitize_settings(raw):
+    data = _r2k_base_sanitize(raw)
+    for key in ("website_record_clicks","website_record_scroll","website_record_click_location","website_record_input","website_record_selection"):
+        data[key] = _safe_bool(data.get(key), DEFAULT_SETTINGS.get(key, False))
+    return data
+
+_r2k_old_init = MouseRecorderApp.__init__
+def _r2k_init(self, *a, **k):
+    _r2k_old_init(self, *a, **k)
+    self.website_clicks_var = tk.BooleanVar(value=bool(self.settings.get("website_record_clicks", True)))
+    self.website_scroll_var = tk.BooleanVar(value=bool(self.settings.get("website_record_scroll", True)))
+    self.website_click_location_var = tk.BooleanVar(value=bool(self.settings.get("website_record_click_location", True)))
+    self.website_input_var = tk.BooleanVar(value=bool(self.settings.get("website_record_input", False)))
+    self.website_selection_var = tk.BooleanVar(value=bool(self.settings.get("website_record_selection", True)))
+
+def _r2k_website_defaults(self):
+    return {
+        "clicks": bool(self.website_clicks_var.get()),
+        "scroll": bool(self.website_scroll_var.get()),
+        "location": bool(self.website_click_location_var.get()),
+        "input": bool(self.website_input_var.get()),
+        "selection": bool(self.website_selection_var.get()),
+    }
+
+def _r2k_preset(self, preset):
+    presets = {
+        "all_safe": (True,True,True,False,True),
+        "clicks_only": (True,False,False,False,False),
+        "click_location": (True,False,True,False,False),
+        "scroll_only": (False,True,False,False,False),
+        "input_only": (False,False,False,True,False),
+        "selection_only": (False,False,False,False,True),
+    }
+    vals = presets.get(preset)
+    if not vals: return
+    for var,val in zip((self.website_clicks_var,self.website_scroll_var,self.website_click_location_var,self.website_input_var,self.website_selection_var), vals):
+        var.set(val)
+    self.save_vars()
+
+_r2k_old_save_vars = MouseRecorderApp.save_vars
+def _r2k_save_vars(self):
+    _r2k_old_save_vars(self)
+    for key,var,default in (
+        ("website_record_clicks",self.website_clicks_var,True),
+        ("website_record_scroll",self.website_scroll_var,True),
+        ("website_record_click_location",self.website_click_location_var,True),
+        ("website_record_input",self.website_input_var,False),
+        ("website_record_selection",self.website_selection_var,True),
+    ):
+        try: self.settings[key] = bool(var.get())
+        except Exception: self.settings[key] = default
+    self.settings = sanitize_settings(self.settings)
+    save_settings(self.settings)
+    self.engine.configure(self.settings)
+
+_r2k_old_browser_smart = MouseRecorderApp.browser_smart_actions
+def _r2k_browser_smart_actions(self):
+    out = []
+    for idx,a in enumerate(self.browser_capture_actions):
+        if not isinstance(a,dict): continue
+        ev = a.get("eventType","click")
+        target = a.get("label") or a.get("ariaLabel") or a.get("text") or a.get("selector") or a.get("xpath") or a.get("tag") or "browser element"
+        detail = target
+        if ev == "scroll": detail = f"Scroll {target} to {a.get('scrollLeft',0)},{a.get('scrollTop',0)}"
+        elif ev == "input": detail = f"Input: {target}"
+        elif ev in {"selection","change"}: detail = f"Selection: {target}"
+        out.append({
+            "type":"browser_click","browser_event_type":ev,"source":"browser","browser_index":idx,"time_from_start":0,
+            "process_name":"browser","window_title":a.get("title",""),"url":a.get("url",""),"target":detail,
+            "selector":a.get("selector",""),"xpath":a.get("xpath",""),"role":a.get("role",""),"tag":a.get("tag",""),
+            "dynamic_rule":a.get("dynamicRule","") or a.get("dynamic_rule",""),"x":a.get("x"),"y":a.get("y"),
+            "scroll_top":a.get("scrollTop"),"scroll_left":a.get("scrollLeft"),"input_value":a.get("value"),
+            "selected_text":a.get("selectedText"),"selected_index":a.get("selectedIndex"),"checked":a.get("checked"),
+        })
+    return out
+
+def _r2k_create_browser_helper(self):
+    try:
+        src = Path(resource_path("Browser_Element_Capture_Helper.html"))
+        if not src.exists(): raise FileNotFoundError("Browser_Element_Capture_Helper.html was not found in the app package.")
+        ensure_folders()
+        html = src.read_text(encoding="utf-8")
+        defaults = json.dumps(self.website_capture_defaults(), separators=(",",":"))
+        html,n = re.subn(r'const DEFAULT_FILTERS = \{[^;]*\};', f"const DEFAULT_FILTERS = {defaults};", html, count=1)
+        if n != 1: raise RuntimeError("Browser helper filter configuration marker was not found.")
+        path = WEBSITE_ACTIONS_DIR / "browser_element_capture.html"
+        path.write_text(html, encoding="utf-8")
+        enabled = [k for k,v in self.website_capture_defaults().items() if v]
+        messagebox.showinfo("Browser Helper", f"Created:\n{path}\n\nDefault filters: {', '.join(enabled) if enabled else 'none'}.\n\nThe browser panel also has Clicks Only, Click + Location, Scroll Only, Input Only, Selection Only, and All Safe presets.")
+        open_folder(WEBSITE_ACTIONS_DIR)
+    except Exception as exc:
+        log_error("create_browser_helper", exc)
+        messagebox.showerror("Browser Helper Error", str(exc))
+
+def _r2k_show_automation(self):
+    self.current_screen.set("Automation")
+    self.clear_content()
+    f = self.scroll_frame(self.panel()); f.columnconfigure(1, weight=1)
+    ttk.Label(f,text="Automation Mode",style="Panel.TLabel",font=("Segoe UI",16,"bold")).grid(row=0,column=0,columnspan=2,sticky="w",padx=18,pady=(14,4))
+    self.help_text(f,"Modes are presets. Website Recording Filters control exactly what Browser Smart Capture records.",1,columnspan=2)
+    row=2
+    for value,title,desc in [
+        ("click_fast","Click-Only Fast","Clicks + scroll + optional keyboard without noisy mouse movement."),
+        ("physical","Physical Replay","Records/replays physical mouse movement, clicks, scroll, and optional keyboard."),
+        ("browser","Browser Element Capture","Creates the semantic browser capture helper."),
+        ("window_aware","Window-Aware","Uses process/window metadata and pauses if the target changes."),
+    ]:
+        box=ttk.LabelFrame(f,text=title); box.grid(row=row,column=0,columnspan=2,sticky="ew",padx=18,pady=6)
+        rb=ttk.Radiobutton(box,text=desc,value=value,variable=self.mode_var,command=lambda v=value:self.apply_mode(v)); rb.pack(anchor="w",padx=12,pady=8); self.tip(rb,desc); row+=1
+
+    box=ttk.LabelFrame(f,text="Website Recording Filters"); box.grid(row=row,column=0,columnspan=2,sticky="ew",padx=18,pady=7); box.columnconfigure((0,1,2),weight=1)
+    ttk.Label(box,text="Choose exactly what Browser Smart Capture records. Regenerate the helper after changing saved defaults.",style="Help.TLabel",wraplength=820,justify="left").grid(row=0,column=0,columnspan=3,sticky="w",padx=12,pady=(9,5))
+    opts=[
+        ("Clicks",self.website_clicks_var,"Record semantic button/link/element clicks."),
+        ("Scroll",self.website_scroll_var,"Record page or scrollable-element positions."),
+        ("Click location",self.website_click_location_var,"Include x/y click coordinates; turn off for semantic-only clicks."),
+        ("Text input",self.website_input_var,"Opt-in non-sensitive text input. Password/security fields are always blocked."),
+        ("Selections",self.website_selection_var,"Record dropdown, checkbox/radio, date/month/week selections."),
+    ]
+    for i,(label,var,hint) in enumerate(opts):
+        cb=ttk.Checkbutton(box,text=label,variable=var,command=self.save_vars); cb.grid(row=1+i//3,column=i%3,sticky="w",padx=12,pady=5); self.tip(cb,hint)
+    ttk.Label(box,text="Text input is OFF by default. Password, token, secret, OTP, CVV/CVC, PIN, SSN and similar security fields are never recorded.",style="Warn.TLabel",wraplength=800,justify="left").grid(row=3,column=0,columnspan=3,sticky="w",padx=12,pady=(4,7))
+    buttons=ttk.Frame(box,style="Panel.TFrame"); buttons.grid(row=4,column=0,columnspan=3,sticky="w",padx=8,pady=(0,9))
+    for label,preset in [("All Safe","all_safe"),("Clicks Only","clicks_only"),("Click + Location","click_location"),("Scroll Only","scroll_only"),("Input Only","input_only"),("Selection Only","selection_only")]:
+        ttk.Button(buttons,text=label,command=lambda p=preset:self.set_website_capture_preset(p)).pack(side="left",padx=3)
+    row+=1
+
+    cal=ttk.LabelFrame(f,text="Calendar + Dynamic Dates"); cal.grid(row=row,column=0,columnspan=2,sticky="ew",padx=18,pady=7); cal.columnconfigure(0,weight=1)
+    ttk.Label(cal,text="Use TODAY when a calendar step should select the actual current date every run.",style="Help.TLabel",wraplength=760,justify="left").grid(row=0,column=0,sticky="w",padx=12,pady=8)
+    ttk.Button(cal,text="Open Calendar Guide",style="Accent.TButton",command=self.show_calendar_guide).grid(row=0,column=1,sticky="e",padx=12,pady=8); row+=1
+
+    smart=ttk.LabelFrame(f,text="Smart Target Recognition"); smart.grid(row=row,column=0,columnspan=2,sticky="ew",padx=18,pady=7)
+    ttk.Checkbutton(smart,text="Record Windows UI Automation target details",variable=self.smart_target_var,command=self.save_vars).grid(row=0,column=0,sticky="w",padx=12,pady=7)
+    ttk.Checkbutton(smart,text="Try semantic target first during playback",variable=self.smart_playback_var,command=self.save_vars).grid(row=0,column=1,sticky="w",padx=12,pady=7)
+    ttk.Checkbutton(smart,text="Detect / allow dynamic Calendar TODAY rules",variable=self.calendar_today_var,command=self.save_vars).grid(row=1,column=0,columnspan=2,sticky="w",padx=12,pady=7); row+=1
+
+    ttk.Label(f,text="Run behavior",style="Panel.TLabel").grid(row=row,column=0,sticky="w",padx=18,pady=8)
+    ttk.Combobox(f,textvariable=self.run_behavior_var,values=["manual","after_save","on_start"],state="readonly",width=18).grid(row=row,column=1,sticky="w",padx=12,pady=8); row+=1
+    ttk.Checkbutton(f,text="Validate target before click/scroll",variable=self.target_validation_var,command=self.save_vars).grid(row=row,column=0,sticky="w",padx=18,pady=8)
+    ttk.Checkbutton(f,text="Pause if target changes",variable=self.pause_target_var,command=self.save_vars).grid(row=row,column=1,sticky="w",padx=12,pady=8); row+=1
+    ttk.Button(f,text="Create Browser Capture Helper",command=self.create_browser_helper).grid(row=row,column=0,sticky="ew",padx=18,pady=10)
+    ttk.Button(f,text="Open Website Actions Folder",command=lambda:open_folder(WEBSITE_ACTIONS_DIR)).grid(row=row,column=1,sticky="ew",padx=18,pady=10); row+=1
+    ttk.Label(f,text="Physical replay controls the active desktop. For true simultaneous work use browser automation, a VM, Remote Desktop, another Windows session, or another PC.",style="Warn.TLabel",wraplength=850,justify="left").grid(row=row,column=0,columnspan=2,sticky="w",padx=18,pady=14)
+
+MouseRecorderApp.__init__ = _r2k_init
+MouseRecorderApp.website_capture_defaults = _r2k_website_defaults
+MouseRecorderApp.set_website_capture_preset = _r2k_preset
+MouseRecorderApp.save_vars = _r2k_save_vars
+MouseRecorderApp.browser_smart_actions = _r2k_browser_smart_actions
+MouseRecorderApp.create_browser_helper = _r2k_create_browser_helper
+MouseRecorderApp.show_automation = _r2k_show_automation
