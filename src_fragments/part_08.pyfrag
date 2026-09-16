@@ -1,0 +1,191 @@
+        self.tip(speed, "Playback speed multiplier. 1x uses recorded timing; higher values shorten delays.")
+        self.speed_label = ttk.Label(settings, text=f"{self.speed_var.get():.1f}x", style="Status.TLabel")
+        self.speed_label.grid(row=0, column=2, sticky="e", padx=12)
+
+        ttk.Label(settings, text="Repeat count", style="Panel.TLabel").grid(row=1, column=0, sticky="w", padx=12, pady=8)
+        repeat = ttk.Spinbox(settings, from_=1, to=999, textvariable=self.repeat_var, width=8, command=self.save_vars)
+        repeat.grid(row=1, column=1, sticky="w", padx=12)
+        self.tip(repeat, "How many times the recording should replay.")
+
+        ttk.Label(settings, text="Delay between runs", style="Panel.TLabel").grid(row=2, column=0, sticky="w", padx=12, pady=8)
+        delay = ttk.Spinbox(settings, from_=0, to=99999, textvariable=self.delay_var, width=10, command=self.save_vars)
+        delay.grid(row=2, column=1, sticky="w", padx=12)
+        self.tip(delay, "Seconds to wait after one replay finishes before the next repeat begins.")
+
+        actions = ttk.Frame(frame, style="Panel.TFrame")
+        actions.grid(row=6, column=0, columnspan=3, sticky="ew", padx=18, pady=(8, 18))
+        export_btn = ttk.Button(actions, text="Export Current Recording", style="Accent.TButton", command=self.show_exports)
+        export_btn.pack(side="left", padx=(0, 6))
+        self.tip(export_btn, "Open the Export page to save the current recording as JSON, TXT, CSV, Python, or Smart Actions formats.")
+        load_btn = ttk.Button(actions, text="Load Recording", command=self.choose_recording)
+        load_btn.pack(side="left", padx=6)
+        self.tip(load_btn, "Choose a previously saved JSON recording to load for review or playback.")
+        help_btn = ttk.Button(actions, text="How It Works", command=self.show_help)
+        help_btn.pack(side="left", padx=6)
+        self.tip(help_btn, "Open the built-in guide with explanations of modes, controls, hotkeys, exports, and safety features.")
+
+
+
+    def choose_recording(self):
+        """Open a file picker and load a saved JSON recording."""
+        path = filedialog.askopenfilename(
+            title="Load Rice2k Macro Studio Recording",
+            initialdir=RECORDINGS_DIR,
+            filetypes=[
+                ("Rice2k Macro Studio recordings", "*.json"),
+                ("JSON files", "*.json"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not path:
+            return False
+        return self.load_path(path)
+
+    def show_recordings(self):
+        self.current_screen.set("Recordings")
+        self.clear_content()
+        p = self.panel()
+        p.rowconfigure(2, weight=1)
+        ttk.Label(p, text="Saved Recordings", style="Panel.TLabel", font=("Segoe UI", 16, "bold")).grid(row=0, column=0, sticky="w", padx=18, pady=(14, 4))
+        ttk.Label(p, text="Load, replay, recover, or export previously saved recordings. Selecting a file does not run it until you press Play.", style="Help.TLabel", wraplength=850, justify="left").grid(row=1, column=0, sticky="w", padx=18, pady=(0, 8))
+        self.recording_list = tk.Listbox(p, bg=self.colors()["panel2"], fg=self.colors()["text"], selectbackground=self.colors()["accent"], font=("Consolas", 10))
+        self.recording_list.grid(row=2, column=0, sticky="nsew", padx=18, pady=8)
+        self.tip(self.recording_list, "Saved recording files. Select one, then use Load, Play, or Export Selected.")
+        bar = ttk.Frame(p, style="Panel.TFrame")
+        bar.grid(row=3, column=0, sticky="ew", padx=18, pady=10)
+        buttons = [
+            ("Refresh", self.refresh_recordings, "Refresh the list from the Recordings folder."),
+            ("Load", self.load_selected, "Load the selected recording into memory without playing it."),
+            ("Play", self.play_selected, "Load the selected recording and open the playback confirmation screen."),
+            ("Export Selected", self.export_selected_recording, "Load the selected recording and open the Export page."),
+            ("Recover Journal", self.recover_journal, "Recover actions from the incremental crash-recovery journal."),
+            ("Open Folder", lambda: open_folder(RECORDINGS_DIR), "Open the Recordings folder in File Explorer."),
+        ]
+        for label, cmd, hint in buttons:
+            b = ttk.Button(bar, text=label, command=cmd)
+            b.pack(side="left", padx=4)
+            self.tip(b, hint)
+        self.refresh_recordings()
+
+    def refresh_recordings(self):
+        self.recording_list.delete(0, "end")
+        for f in sorted(RECORDINGS_DIR.glob("*.json"), reverse=True):
+            self.recording_list.insert("end", str(f))
+
+    def load_selected(self):
+        sel = self.recording_list.curselection()
+        if not sel:
+            messagebox.showwarning("No Selection", "Select a recording first.")
+            return False
+        return self.load_path(self.recording_list.get(sel[0]))
+
+    def play_selected(self):
+        if self.load_selected():
+            self.confirm_playback()
+
+    def recover_journal(self):
+        try:
+            count = self.engine.load_recovery_journal()
+            self.action_count_var.set(self.counts_text())
+            messagebox.showinfo("Recovery", f"Recovered {count} actions from the incremental journal.")
+        except Exception as exc:
+            log_error("recover_journal", exc)
+            messagebox.showerror("Recovery Error", str(exc))
+
+
+
+    def browser_smart_actions(self):
+        result = []
+        for idx, a in enumerate(self.browser_capture_actions):
+            if not isinstance(a, dict):
+                continue
+            target = (
+                a.get("label") or a.get("ariaLabel") or a.get("text") or
+                a.get("selector") or a.get("xpath") or a.get("tag") or "browser element"
+            )
+            result.append({
+                "type": "browser_change" if a.get("eventType") == "change" else "browser_click",
+                "source": "browser",
+                "browser_index": idx,
+                "time_from_start": 0,
+                "process_name": "browser",
+                "window_title": a.get("title", ""),
+                "url": a.get("url", ""),
+                "target": target,
+                "selector": a.get("selector", ""),
+                "xpath": a.get("xpath", ""),
+                "role": a.get("role", ""),
+                "tag": a.get("tag", ""),
+                "dynamic_rule": a.get("dynamicRule", "") or a.get("dynamic_rule", ""),
+            })
+        return result
+
+    def show_smart_actions(self):
+        self.current_screen.set("Smart Actions")
+        self.clear_content()
+        p = self.panel()
+        p.rowconfigure(2, weight=1)
+        ttk.Label(p, text="Smart Targets + Actions", style="Panel.TLabel", font=("Segoe UI", 16, "bold")).grid(row=0, column=0, sticky="w", padx=18, pady=(14, 4))
+        ttk.Label(
+            p,
+            text="Windows clicks can include UI Automation control names/types. Browser capture data can be imported into the same view. "
+                 "For calendars, select a Windows click and mark it TODAY so replay searches for today's semantic date instead of yesterday's coordinates.",
+            style="Help.TLabel", wraplength=920, justify="left"
+        ).grid(row=1, column=0, sticky="w", padx=18, pady=(0, 8))
+
+        columns = ("source", "time", "action", "process", "window", "target", "rule")
+        tree = ttk.Treeview(p, columns=columns, show="headings")
+        for c, title, width in [
+            ("source", "Source", 80), ("time", "Time", 70), ("action", "Action", 120),
+            ("process", "Process", 105), ("window", "Window / Page", 235),
+            ("target", "Recognized Target", 330), ("rule", "Dynamic Rule", 105)
+        ]:
+            tree.heading(c, text=title)
+            tree.column(c, width=width, stretch=True)
+        tree.grid(row=2, column=0, sticky="nsew", padx=18, pady=8)
+        scroll = ttk.Scrollbar(p, orient="vertical", command=tree.yview)
+        scroll.grid(row=2, column=1, sticky="ns", pady=8)
+        tree.configure(yscrollcommand=scroll.set)
+        self.tip(tree, "Combined semantic action view. Windows controls come from UI Automation when available; browser targets come from imported capture JSON.")
+
+        self.smart_tree = tree
+        self.smart_row_map = {}
+        smart = build_smart_actions(self.engine.snapshot_actions())
+        combined = [dict(a) for a in smart] + self.browser_smart_actions()
+
+        for idx, a in enumerate(combined[:5000]):
+            source = a.get("source", "windows")
+            t = f"{float(a.get('time_from_start',0)):.2f}s" if source == "windows" else "—"
+            typ = a.get("type", "")
+            target = ""
+            if typ == "mouse_click":
+                semantic = a.get("control_name") or a.get("automation_id") or a.get("control_type")
+                if semantic:
+                    target = f"{a.get('control_type','Control')}: {semantic}"
+                else:
+                    target = f"{a.get('button','left')} @ {a.get('x')},{a.get('y')}"
+            elif typ == "type_text":
+                target = f"Text block ({len(a.get('text',''))} chars)"
+            elif typ == "scroll":
+                target = f"dx={a.get('dx',0)} dy={a.get('dy',0)} @ {a.get('x')},{a.get('y')}"
+            elif typ == "key":
+                target = a.get("key", "")
+            elif typ == "browser_click":
+                target = a.get("target", "")
+                if a.get("url"):
+                    target += f" | {a.get('url')}"
+            iid = f"smart_{idx}"
+            tree.insert("", "end", iid=iid, values=(
+                source, t, typ, a.get("process_name", ""),
+                a.get("window_title", ""), target, a.get("dynamic_rule", "")
+            ))
+            self.smart_row_map[iid] = a
+
+        bar = ttk.Frame(p, style="Panel.TFrame")
+        bar.grid(row=3, column=0, sticky="ew", padx=18, pady=10)
+        actions = [
+            ("Mark Selected = TODAY", self.mark_selected_today,
+             "Turns the selected Windows calendar click into a dynamic Today action. On future replay it searches the target window for today's accessible date label."),
+            ("Clear Dynamic Rule", self.clear_selected_dynamic_rule,
+             "Remove the dynamic rule from the selected Windows action and return to normal semantic/coordinate replay."),
+            ("Import Browser Capture", self.import_browser_capture,
