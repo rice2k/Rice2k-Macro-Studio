@@ -1,0 +1,158 @@
+            if b.get("type") == "click" and not b.get("pressed") and b.get("button") == a.get("button") and abs(int(b.get("x", 0)) - int(a.get("x", 0))) <= 3 and abs(int(b.get("y", 0)) - int(a.get("y", 0))) <= 3:
+                flush_text()
+                smart.append({
+                    "type": "mouse_click", "button": a.get("button", "left"), "x": a.get("x", 0), "y": a.get("y", 0),
+                    "window_title": a.get("window_title", ""), "process_name": a.get("process_name", ""),
+                    "time_from_start": a.get("time_from_start", 0), "raw_index": i,
+                    "control_name": a.get("control_name", ""), "control_type": a.get("control_type", ""),
+                    "automation_id": a.get("automation_id", ""), "control_class": a.get("control_class", ""),
+                    "framework_id": a.get("framework_id", ""), "dynamic_rule": a.get("dynamic_rule", ""),
+                    "source": "windows",
+                })
+                i += 2
+                continue
+        if t == "key" and a.get("pressed") and a.get("key_kind") == "char":
+            key = a.get("key", "")
+            if len(key) == 1:
+                if not text_buffer:
+                    text_meta = {"window_title": a.get("window_title", ""), "process_name": a.get("process_name", ""), "time_from_start": a.get("time_from_start", 0)}
+                text_buffer.append(key)
+                i += 1
+                if i < len(actions) and actions[i].get("type") == "key" and not actions[i].get("pressed") and actions[i].get("key") == key:
+                    i += 1
+                continue
+        flush_text()
+        if t == "scroll":
+            smart.append({"type": "scroll", "dx": a.get("dx", 0), "dy": a.get("dy", 0), "x": a.get("x", 0), "y": a.get("y", 0), "window_title": a.get("window_title", ""), "process_name": a.get("process_name", ""), "time_from_start": a.get("time_from_start", 0), "source": "windows"})
+        elif t == "key" and a.get("pressed"):
+            smart.append({"type": "key", "key": a.get("key", ""), "window_title": a.get("window_title", ""), "process_name": a.get("process_name", ""), "time_from_start": a.get("time_from_start", 0), "source": "windows"})
+        elif t == "click":
+            smart.append(dict(a))
+        i += 1
+    flush_text()
+    return smart
+
+
+class MouseRecorderApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        ensure_folders()
+        self.settings = load_settings()
+        self.title(f"{APP_NAME} - {APP_VERSION}")
+        self.geometry("1250x780")
+        self.minsize(1020, 640)
+        self.log_lines = []
+        self.log_queue = queue.Queue()
+        self.engine = RecorderEngine(status_callback=self.set_status, log_callback=self.add_log)
+        self.engine.configure(self.settings)
+
+        self.current_screen = tk.StringVar(value="Dashboard")
+        self.status_var = tk.StringVar(value="Ready")
+        self.loaded_file_var = tk.StringVar(value=self.settings.get("last_recording") or "No recording loaded")
+        self.action_count_var = tk.StringVar(value="Actions: 0")
+        self.elapsed_var = tk.StringVar(value="00:00")
+        self.playback_var = tk.StringVar(value="Ready")
+        self.preflight_var = tk.StringVar(value="Not checked")
+        self.calendar_test_var = tk.StringVar(value="Calendar TODAY test not run")
+        self.browser_capture_actions = []
+
+        self.speed_var = tk.DoubleVar(value=float(self.settings.get("speed", 1.0)))
+        self.repeat_var = tk.IntVar(value=int(self.settings.get("repeat_count", 1)))
+        self.delay_var = tk.IntVar(value=int(self.settings.get("delay_seconds", 0)))
+        self.countdown_var = tk.IntVar(value=int(self.settings.get("countdown_seconds", 3)))
+        self.record_mouse_var = tk.BooleanVar(value=bool(self.settings.get("record_mouse", True)))
+        self.record_keyboard_var = tk.BooleanVar(value=bool(self.settings.get("record_keyboard", False)))
+        self.record_scroll_var = tk.BooleanVar(value=bool(self.settings.get("record_scroll", True)))
+        self.record_mouse_moves_var = tk.BooleanVar(value=bool(self.settings.get("record_mouse_moves", False)))
+        self.skip_moves_var = tk.BooleanVar(value=bool(self.settings.get("playback_skip_moves", True)))
+        self.mode_var = tk.StringVar(value=self.settings.get("automation_mode", "click_fast"))
+        self.mouse_safe_var = tk.BooleanVar(value=bool(self.settings.get("mouse_only_safe_mode", True)))
+        self.human_like_var = tk.BooleanVar(value=bool(self.settings.get("human_like", False)))
+        self.target_validation_var = tk.BooleanVar(value=bool(self.settings.get("target_validation", True)))
+        self.pause_target_var = tk.BooleanVar(value=bool(self.settings.get("pause_on_target_change", True)))
+        self.smart_target_var = tk.BooleanVar(value=bool(self.settings.get("record_smart_targets", True)))
+        self.smart_playback_var = tk.BooleanVar(value=bool(self.settings.get("smart_target_playback", True)))
+        self.calendar_today_var = tk.BooleanVar(value=bool(self.settings.get("calendar_today_enabled", True)))
+        self.debug_var = tk.BooleanVar(value=bool(self.settings.get("debug_logging", False)))
+        self.run_behavior_var = tk.StringVar(value=self.settings.get("run_behavior", "manual"))
+        self.theme_var = tk.StringVar(value=self.settings.get("theme", "dark"))
+        self.cal_x_var = tk.IntVar(value=int(self.settings.get("calibration_x", 0)))
+        self.cal_y_var = tk.IntVar(value=int(self.settings.get("calibration_y", 0)))
+        self.hotkey_vars = {
+            "start": tk.StringVar(value=self.settings.get("hotkey_start", "f8")),
+            "stop": tk.StringVar(value=self.settings.get("hotkey_stop", "f9")),
+            "pause": tk.StringVar(value=self.settings.get("hotkey_pause", "f10")),
+            "play": tk.StringVar(value=self.settings.get("hotkey_play", "f12")),
+            "emergency": tk.StringVar(value=self.settings.get("hotkey_emergency", "esc")),
+        }
+
+        self.floating = None
+        self.floating_label = None
+        self.record_start_time = None
+        self.timer_job = None
+        self.play_thread = None
+        self.global_hotkey_listener = None
+        self._build_style()
+        self._build_layout()
+        self._start_hotkeys()
+        self.after(150, self._drain_log_queue)
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        if self.settings.get("run_behavior") == "on_start" and self.settings.get("last_recording"):
+            self.after(1200, self.auto_run_last)
+
+    def colors(self):
+        return THEMES.get(self.theme_var.get(), THEMES["dark"])
+
+    def report_callback_exception(self, exc_type, exc_value, exc_tb):
+        """Tkinter routes callback failures here instead of sys.excepthook."""
+        exc = exc_value if isinstance(exc_value, BaseException) else RuntimeError(str(exc_value))
+        extra = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        log_error("Tkinter callback exception", exc, extra=extra)
+        try:
+            messagebox.showerror(
+                "Rice2k Macro Studio Error",
+                f"{exc_value}\n\nDetails were saved to:\n{ERROR_LOG_FILE}\n\n"
+                f"Fallback log (if Documents is unavailable):\n{FALLBACK_ERROR_LOG_FILE}"
+            )
+        except Exception:
+            pass
+
+    def _build_style(self):
+        c = self.colors()
+        self.configure(bg=c["bg"])
+        self.style = ttk.Style()
+        try:
+            self.style.theme_use("clam")
+        except Exception:
+            pass
+        self.style.configure("TFrame", background=c["bg"])
+        self.style.configure("Panel.TFrame", background=c["panel"])
+        self.style.configure("TLabel", background=c["bg"], foreground=c["text"], font=("Segoe UI", 10))
+        self.style.configure("Panel.TLabel", background=c["panel"], foreground=c["text"], font=("Segoe UI", 10))
+        self.style.configure("Header.TLabel", background=c["bg"], foreground=c["text"], font=("Segoe UI", 20, "bold"))
+        self.style.configure("Sub.TLabel", background=c["bg"], foreground=c["sub"], font=("Segoe UI", 10))
+        self.style.configure("Status.TLabel", background=c["panel"], foreground=c["accent"], font=("Segoe UI", 12, "bold"))
+        self.style.configure("Warn.TLabel", background=c["panel"], foreground=c["warning"], font=("Segoe UI", 10, "bold"))
+        self.style.configure("Success.TLabel", background=c["panel"], foreground=c["success"], font=("Segoe UI", 10, "bold"))
+        self.style.configure("Help.TLabel", background=c["panel"], foreground=c["sub"], font=("Segoe UI", 9))
+        self.style.configure("Section.TLabel", background=c["panel"], foreground=c["text"], font=("Segoe UI", 13, "bold"))
+        self.style.configure("TButton", font=("Segoe UI", 10), padding=8, background=c["panel2"], foreground=c["text"])
+        self.style.configure("Primary.TButton", font=("Segoe UI", 11, "bold"), padding=10, background=c["accent"], foreground="#FFFFFF")
+        self.style.configure("Accent.TButton", font=("Segoe UI", 10, "bold"), padding=8, background=c["accent2"], foreground="#08131F")
+        self.style.configure("Danger.TButton", font=("Segoe UI", 10, "bold"), padding=8, background=c["danger"], foreground="#FFFFFF")
+        self.style.configure("Sidebar.TButton", font=("Segoe UI", 10), padding=7, background=c["panel"], foreground=c["text"])
+        self.style.configure("TCheckbutton", background=c["panel"], foreground=c["text"])
+        self.style.configure("TRadiobutton", background=c["panel"], foreground=c["text"])
+        self.style.configure("TLabelframe", background=c["panel"], foreground=c["text"], bordercolor=c["border"])
+        self.style.configure("TLabelframe.Label", background=c["panel"], foreground=c["text"], font=("Segoe UI", 10, "bold"))
+        self.style.configure("Treeview", background=c["panel2"], fieldbackground=c["panel2"], foreground=c["text"], rowheight=26, bordercolor=c["border"])
+        self.style.configure("Treeview.Heading", background=c["panel"], foreground=c["text"], font=("Segoe UI", 10, "bold"))
+        self.style.map("Primary.TButton", background=[("active", c["accent2"])])
+        self.style.map("Sidebar.TButton", background=[("active", c["panel2"])])
+
+    def _build_layout(self):
+        self.columnconfigure(1, weight=1)
+        self.rowconfigure(0, weight=1)
+        sidebar = ttk.Frame(self, style="Panel.TFrame", width=185)
+        sidebar.grid(row=0, column=0, sticky="ns")
