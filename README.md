@@ -1,267 +1,176 @@
-<p align="center">
-  <img src="rice2k_macro_studio.png" width="128" alt="Rice2k Macro Studio logo">
-</p>
+<div align="center">
 
-<h1 align="center">Rice2k Macro Studio</h1>
+# Rice2k Macro Studio
 
-<p align="center"><strong>Record. Automate. Simplify.</strong></p>
+### Record • Automate • Simplify
 
-<p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.2-178BFF">
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-0078D4">
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB">
-  <img alt="Status" src="https://img.shields.io/badge/status-active-35D487">
-  <img alt="UI" src="https://img.shields.io/badge/UI-compact%20dark-10243A">
-  <img alt="Browser" src="https://img.shields.io/badge/browser-smart%20capture-8A2BE2">
-</p>
+**A Windows macro recording and automation studio by Rice2k**
 
-**Rice2k Macro Studio** is a Windows macro recorder and automation utility built around mouse/keyboard/scroll capture, smart desktop targets, browser element capture, dynamic calendar rules, replay controls, diagnostics, recovery, and multiple export formats.
+![Version](https://img.shields.io/badge/version-1.3-0B83FF)
+![Platform](https://img.shields.io/badge/platform-Windows-178BFF)
+![UI](https://img.shields.io/badge/UI-Mockup--Matched-20D6C2)
+![Status](https://img.shields.io/badge/status-active-26DB7A)
 
----
+</div>
 
-## 🧭 Start Here
+Rice2k Macro Studio records and replays mouse clicks, keyboard input, scrolling, optional mouse movement, smart Windows UI targets, browser element actions, and dynamic calendar rules such as **TODAY**.
 
-| I want to… | Use this |
-|---|---|
-| Record ordinary desktop clicks quickly | **Click-Only Fast** |
-| Replay the exact mouse path | **Physical Replay** |
-| Avoid clicking the wrong app/window | **Window-Aware + target validation** |
-| Click controls that move around | **Windows Smart Targets** |
-| Automate websites semantically | **Browser Smart Capture** |
-| Record only website scrolling | **Scroll Only** preset |
-| Record web clicks without coordinates | **Clicks Only** preset |
-| Record web clicks with coordinate fallback | **Click + Location** preset |
-| Record dropdowns / checkboxes / radio buttons | **Selection Only** / **All Safe** |
-| Enter ordinary non-sensitive web text | Enable **Text Input** |
-| Always choose the current date | **TODAY rule** |
-| Review simplified actions | **Smart Actions** |
-| Edit raw low-level actions | **Raw Action Editor** |
-| Diagnose startup problems | `Run_Setup_Diagnostics.bat` |
-| Diagnose replay problems | **Pre-flight + Error Logs** |
+## v1.3 Mockup-Matched UI
 
----
+<div align="center">
+<img src="rice2k_macro_studio.png" width="128" alt="Rice2k Macro Studio icon">
+</div>
 
-## ✨ Current Release — v1.2 Compact UI Redesign
+Version 1.3 rebuilds the shell and Dashboard around the approved visual concept instead of only applying colors to standard widgets.
 
-v1.2 keeps the full v1.1 automation feature set and replaces the visual shell with a tighter, more consistent design system.
+### What changed visually
 
-### UI changes
-
-- Compact **152 px icon + label sidebar**
-- Rice2k **mouse + gear** visual identity
-- Tighter dashboard cards and page spacing
-- Icon-forward Start / Stop + Save / Pause / Play / Emergency controls
-- Compact quick actions, tips, playback settings, and hotkey reference
-- **Segoe UI Variable** on supported Windows versions, falling back to Segoe UI
-- Dark entries, spinboxes, comboboxes, treeviews, scrollbars, and selections
-- Explicit hover / focus / pressed / disabled / readonly colors
-- Fix for the bright-white Windows ttk highlight fallback in dark mode
+- Full branded top header with the Rice2k mouse-and-gear identity
+- Compact icon-led sidebar matching the approved layout
+- Card-based Dashboard instead of thin `ttk` fieldsets
+- Larger recording/playback controls
+- Status chips and large stat cards
+- Two-column recording/playback settings area
+- Quick Actions, Tips, and Hotkeys cards
+- Persistent footer status area
+- Auto-hiding page scrollbar
 - Mouse-wheel scrolling on scrollable pages
-- Active sidebar state instead of white focus highlighting
+- Explicit dark hover, focus, pressed, disabled, readonly, and selected states
+- No system-white hover fallback in dark mode
+- Segoe UI Variable / Segoe UI font preference on Windows
+- Custom Rice2k Macro Studio application icon
 
-Full UI rules: **[UI Design Standards](docs/UI_DESIGN_STANDARDS.md)**  
-Detailed redesign notes: **[v1.2 UI Redesign](docs/V1_2_UI_REDESIGN.md)**
+## Navigation
 
----
+| Page | Use it for |
+| --- | --- |
+| **Dashboard** | Start/stop recording, playback, quick settings, hotkeys |
+| **Recordings** | Load, replay, export, or recover saved recordings |
+| **Web Capture** | Browser semantic capture and website recording filters |
+| **Smart Targets** | Review recognized Windows/browser targets and dynamic rules |
+| **Calendar** | Configure and test dynamic **TODAY** calendar actions |
+| **Settings** | Theme, countdown, timing, and global hotkeys |
+| **Diagnostics** | Pre-flight tests, calibration, error logs, UIA status |
+| **Export** | JSON, TXT, CSV, Python, Smart JSON, Smart CSV |
+| **Help** | Built-in workflow and feature documentation |
 
-## 🚀 Quick Start
+## Recommended everyday setup
 
-1. Download or clone the repository.
-2. Extract the complete folder if you downloaded a ZIP.
-3. Run:
+For most tasks:
 
-```text
-Run_Rice2k_Macro_Studio.bat
-```
+- **Mouse clicks:** On
+- **Scroll wheel:** On
+- **Keyboard:** Only when needed
+- **Mouse movement path:** Off
+- **Skip movement on playback:** On
+- **Mode:** Click-Only Fast
 
-The launcher checks Python, Tkinter, dependencies, source fragments, source patches, and compile status before opening the application.
+Use **Smart Targets** when the target button/control can move. Use **Web Capture** when automating browser pages. Use **Physical Replay** only when the exact pointer path matters.
 
-### Recommended first recording
+## Website recording filters
 
-| Setting | Recommended |
-|---|---:|
-| Mouse clicks | ✅ On |
-| Scroll wheel | ✅ On |
-| Keyboard | Only when needed |
-| Mouse movement path | ❌ Off |
-| Skip movement on playback | ✅ On |
-| Mode | **Click-Only Fast** |
-
-Default hotkeys: **F8 Start · F9 Stop + Save · F10 Pause/Resume · F12 Play · Esc Emergency Stop**
-
----
-
-## 🧩 Main Features
-
-### 🖱 Desktop recording
-- Mouse clicks
-- Independent scroll-wheel recording
-- Optional keyboard capture/replay
-- Optional full mouse-movement path
-- Pause/resume recording
-- Floating recording controller
-- Multi-monitor / virtual-desktop metadata
-- DPI and window metadata
-
-### ▶ Playback
-- Adjustable speed
-- Repeat count
-- Delay between runs
-- Countdown
-- Pause/resume
-- Emergency stop
-- Interruptible waits
-- Held mouse/key cleanup
-- Target-window validation
-- Pause if the target application/window changes
-
-### 🧠 Windows Smart Targets
-- Window title
-- Process/application name
-- PID / HWND
-- Window rectangle
-- Control name/type
-- Automation ID
-- Control class/framework
-- Semantic activation for supported simple controls
-- Coordinate fallback
-- Reopened-window resolution when the original HWND becomes stale
-
-### 🌐 Website Recording Filters
 Browser Smart Capture can independently record:
 
 - **Clicks**
 - **Scroll**
 - **Click location**
 - **Text input** — opt-in
-- **Selections** — dropdowns / checkboxes / radios / dates
+- **Selections** — dropdowns, checkbox/radio state, date/month/week
 
-Presets:
+Presets include **All Safe**, **Clicks Only**, **Click + Location**, **Scroll Only**, **Input Only**, and **Selection Only**.
 
-`All Safe` · `Clicks Only` · `Click + Location` · `Scroll Only` · `Input Only` · `Selection Only`
+Text input is off by default. Passwords, passcodes, tokens, secrets, API keys, authentication fields, OTP/verification codes, CVV/CVC, PIN, SSN, and similar security fields are blocked/redacted.
 
-> **Privacy:** Text input is OFF by default. Passwords, passcodes, tokens, secrets, API keys, authentication fields, OTP/verification codes, CVV/CVC, PIN, SSN, and similar security fields are blocked/redacted.
+## Dynamic calendar TODAY
 
-### 📅 Dynamic Calendar TODAY
-A calendar action can mean **“select the actual current date when this runs”** rather than “click yesterday’s x/y position.”
+### Windows/native calendar
 
-Supported through Windows UI Automation and Browser Smart Capture.
+1. Record the calendar date click.
+2. Open **Smart Targets**.
+3. Select the recognized date click.
+4. Choose **Mark Selected = TODAY**.
+5. Save the edited copy.
 
-### 🧾 Review & Export
-- Smart Actions
-- Raw Action Editor
-- Raw JSON
-- Readable TXT
-- Raw CSV
-- Smart JSON
-- Smart CSV
-- Python/PyAutoGUI-style export
+### Website calendar
 
-### 🛠 Reliability & Diagnostics
-- Self-diagnosing BAT launcher
-- Setup diagnostics
-- Startup log
-- Error log
-- Tkinter callback exception logging
-- Worker-thread exception logging
-- `faulthandler` logging where supported
-- Recovery journal
-- Pre-flight test
-- Calendar TODAY self-test
-- Settings validation/recovery
+1. Create/open the Browser Element Capture helper.
+2. Start Smart Capture.
+3. Open the calendar.
+4. Choose **Mark Next = TODAY**.
+5. Click today's date.
 
----
+The replay resolves the current date again instead of reusing the old coordinate.
 
-## 📚 Documentation
+## Playback and safety
 
-| Guide | Purpose |
-|---|---|
-| [Feature Guide](docs/FEATURES.md) | Detailed feature descriptions |
-| [User Guide](docs/USER_GUIDE.md) | Recording and playback workflow |
-| [Website Recording](docs/WEBSITE_RECORDING.md) | Browser filters and semantic capture |
-| [Calendar Automation](docs/CALENDAR_AUTOMATION.md) | TODAY rules and date pickers |
-| [Logging & Diagnostics](docs/LOGGING_AND_DIAGNOSTICS.md) | Logs, tests, and troubleshooting data |
-| [Troubleshooting](docs/TROUBLESHOOTING.md) | Common startup/playback problems |
-| [UI Design Standards](docs/UI_DESIGN_STANDARDS.md) | Compact UI rules for future Rice2k tools |
-| [v1.2 UI Redesign](docs/V1_2_UI_REDESIGN.md) | What changed visually in v1.2 |
-| [Version History](docs/VERSION_HISTORY.md) | Project chronology |
-| [CHANGELOG.md](CHANGELOG.md) | Release-by-release changes |
+- Repeat count and delay between runs
+- Playback speed control
+- Pause/resume
+- Emergency stop
+- Held-key/button cleanup
+- Target-window validation
+- Pause if target changes
+- Multi-monitor/DPI metadata
+- Mouse-only safe mode
 
----
+> Physical replay controls the active desktop. For true simultaneous independent work, use semantic browser automation, another Windows session, a VM/Remote Desktop session, or another PC.
 
-## 🪵 Logs
+## Default hotkeys
 
-Normal location:
+| Action | Hotkey |
+| --- | --- |
+| Start Recording | `F8` |
+| Stop + Save | `F9` |
+| Pause / Resume | `F10` |
+| Play | `F12` |
+| Emergency Stop | `Esc` |
 
-```text
-Documents\Rice2k Macro Studio\Errors
-```
+## Error logs and diagnostics
 
-| File | Purpose |
-|---|---|
-| `launcher_log.txt` | Python/dependency/startup checks |
-| `startup_log.txt` | Application startup milestones |
-| `error_log.txt` | Handled/unhandled application errors |
-| `faulthandler.log` | Low-level Python fault details |
-| `setup_diagnostics.txt` | Environment/package diagnostic results |
+Normal log folder:
 
-If Documents cannot be written, error/startup logging falls back under `%TEMP%\Rice2k Macro Studio`.
+`Documents\Rice2k Macro Studio\Errors`
 
----
+Files may include:
 
-## 🏗 Build the EXE
+- `launcher_log.txt`
+- `startup_log.txt`
+- `error_log.txt`
+- `faulthandler.log`
+- `setup_diagnostics.txt`
+
+If the Documents path cannot be written, startup/error logging falls back under `%TEMP%\Rice2k Macro Studio`.
+
+Run `Run_Setup_Diagnostics.bat` when the launcher or GUI fails to start.
+
+## Run
+
+1. Extract the complete ZIP or clone the repository.
+2. Run `Run_Rice2k_Macro_Studio.bat`.
+3. The launcher verifies Python, Tkinter, dependencies, source fragments, version patches, and source compilation before startup.
+
+## Build the EXE
 
 Run:
 
-```text
-Build_Rice2k_Macro_Studio_EXE.bat
-```
+`Build_Rice2k_Macro_Studio_EXE.bat`
 
 Expected output:
 
-```text
-dist\Rice2k Macro Studio.exe
-```
+`dist\Rice2k Macro Studio.exe`
 
-The build bundles the source fragments, all version patches, browser helper, and application icon.
+The build bundles the browser helper, app icon, source fragments, and version patches. Navigation icons have embedded fallbacks so source installs remain self-contained.
 
----
+## Documentation
 
-## 📂 Source Layout
+- [`docs/V1_3_UI_REDESIGN.md`](docs/V1_3_UI_REDESIGN.md) — v1.3 visual implementation
+- [`docs/UI_DESIGN_STANDARDS.md`](docs/UI_DESIGN_STANDARDS.md) — UI rules for this and future Rice2k tools
+- [`docs/VERSION_HISTORY.md`](docs/VERSION_HISTORY.md) — release history
+- [`CHANGELOG.md`](CHANGELOG.md) — version changes
+- [`README.txt`](README.txt) — compact offline guide
 
-```text
-Rice2k-Macro-Studio/
-├─ rice2k_macro_studio.py
-├─ src_fragments/
-│  └─ part_01.pyfrag ... part_14.pyfrag
-├─ src_patches/
-│  ├─ v1_1_website_filters.pyfrag
-│  └─ v1_2_compact_ui.pyfrag
-├─ Browser_Element_Capture_Helper.html
-├─ rice2k_macro_studio.png
-├─ Run_Rice2k_Macro_Studio.bat
-├─ Run_Setup_Diagnostics.bat
-├─ Build_Rice2k_Macro_Studio_EXE.bat
-├─ docs/
-├─ CHANGELOG.md
-└─ VALIDATION_REPORT.json
-```
+## Project
 
-The loader reconstructs the base application and applies version patches in filename order before `main()` starts.
+Created by **Rice2k**.
 
----
-
-## 🔒 Safety / Privacy Notes
-
-- Website text-input recording is opt-in.
-- Sensitive credential/security fields are blocked/redacted.
-- Physical replay controls the active Windows desktop.
-- For truly simultaneous automation while independently using the same desktop, prefer browser semantic automation, a VM, Remote Desktop, another Windows session, or another PC.
-
----
-
-## 👤 Project
-
-Created and maintained as a **Rice2k** project.
-
-**Repository:** `rice2k/Rice2k-Macro-Studio`
+Repository: `rice2k/Rice2k-Macro-Studio`
