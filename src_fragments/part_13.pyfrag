@@ -1,0 +1,189 @@
+            open_folder(WEBSITE_ACTIONS_DIR)
+        except Exception as exc:
+            log_error("create_browser_helper", exc)
+            messagebox.showerror("Browser Helper Error", str(exc))
+
+
+    def show_help(self):
+        self.current_screen.set("Help & Guide")
+        self.clear_content()
+        f = self.scroll_frame(self.panel())
+        f.columnconfigure(0, weight=1)
+
+        ttk.Label(f, text="How Rice2k Macro Studio Works", style="Panel.TLabel", font=("Segoe UI", 16, "bold")).grid(row=0, column=0, sticky="w", padx=18, pady=(14, 4))
+        ttk.Label(f, text="Quick reference for the controls and recommended workflow.", style="Help.TLabel").grid(row=1, column=0, sticky="w", padx=18, pady=(0, 12))
+
+        sections = [
+            ("Recommended workflow",
+             "1. Choose Click-Only Fast mode. 2. Enable Mouse clicks and Scroll. 3. Enable Keyboard only when needed. "
+             "4. Start recording. 5. Stop + Save. 6. Review Smart Actions. 7. Run Pre-flight. 8. Play or export."),
+            ("Click-Only Fast",
+             "Records useful clicks, scroll events, and optional keyboard actions without storing the entire cursor path. "
+             "This normally produces the smoothest and smallest recording."),
+            ("Physical Replay",
+             "Use when the exact mouse path matters. Mouse movement path can create many actions, so playback may be larger and slower."),
+            ("Window-Aware safety",
+             "Stores process/window information and can pause if the active target changes before a click or scroll."),
+            ("Windows Smart Targets",
+             "When pywinauto/UI Automation is available, clicks can record the control name, control type, AutomationId, class, and framework. "
+             "Playback can try that recognized control first and fall back to coordinates if semantic activation is unavailable."),
+            ("Calendar TODAY rule",
+             "For a Windows calendar, record the click, open Smart Targets + Actions, select that click, and press Mark Selected = TODAY. "
+             "On future runs the app searches the target window for today's accessible date label. For websites, use the browser helper's Mark Next = TODAY button."),
+            ("Browser Element Capture",
+             "Use the included browser helper when page elements matter more than screen coordinates. It captures labels, roles, selectors, URL and title without storing typed field values."),
+            ("Smart Targets + Actions",
+             "A combined review layer. Windows clicks can include UI Automation control names/types; imported browser capture rows include page labels/selectors. "
+             "A click becomes one row, normal typing becomes a text block, and scroll remains separate. The raw recording is not changed."),
+            ("Export formats",
+             "Raw JSON is best for backup. TXT is easiest to read. CSV is best for Excel. Python is useful for manual customization. Smart JSON/CSV contain the simplified action view."),
+            ("Pre-flight",
+             "Checks common problems before playback, including missing dependencies, hotkey conflicts, target/window information, and display layout."),
+            ("Calibration",
+             "X/Y calibration offsets shift mapped click positions when every playback click is consistently too far left/right/up/down."),
+            ("Background limitation",
+             "Physical mouse/keyboard playback controls the active desktop. For truly simultaneous work use browser automation, a VM, Remote Desktop, another session, or another PC."),
+            ("Error log",
+             "If something fails, open Diagnostics and the Error Log. It records detailed exceptions and environment information to help diagnose the problem."),
+        ]
+        row = 2
+        for title, desc in sections:
+            box = ttk.LabelFrame(f, text=title)
+            box.grid(row=row, column=0, sticky="ew", padx=18, pady=6)
+            ttk.Label(box, text=desc, style="Help.TLabel", wraplength=900, justify="left").pack(anchor="w", padx=12, pady=10)
+            row += 1
+
+        ttk.Label(f, text="Default hotkeys: F8 Start • F9 Stop + Save • F10 Pause/Resume • F12 Play • ESC Emergency Stop", style="Success.TLabel").grid(row=row, column=0, sticky="w", padx=18, pady=14)
+
+    def save_vars(self):
+        def get(var, default):
+            try:
+                return var.get()
+            except Exception:
+                return default
+
+        updated = dict(self.settings)
+        updated.update({
+            "speed": get(self.speed_var, 1.0),
+            "repeat_count": get(self.repeat_var, 1),
+            "delay_seconds": get(self.delay_var, 0),
+            "countdown_seconds": get(self.countdown_var, 3),
+            "record_mouse": get(self.record_mouse_var, True),
+            "record_keyboard": get(self.record_keyboard_var, False),
+            "record_scroll": get(self.record_scroll_var, True),
+            "record_mouse_moves": get(self.record_mouse_moves_var, False),
+            "playback_skip_moves": get(self.skip_moves_var, True),
+            "automation_mode": get(self.mode_var, "click_fast"),
+            "mouse_only_safe_mode": get(self.mouse_safe_var, True),
+            "human_like": get(self.human_like_var, False),
+            "target_validation": get(self.target_validation_var, True),
+            "pause_on_target_change": get(self.pause_target_var, True),
+            "record_smart_targets": get(self.smart_target_var, True),
+            "smart_target_playback": get(self.smart_playback_var, True),
+            "calendar_today_enabled": get(self.calendar_today_var, True),
+            "debug_logging": get(self.debug_var, False),
+            "run_behavior": get(self.run_behavior_var, "manual"),
+            "theme": get(self.theme_var, "dark"),
+            "calibration_x": get(self.cal_x_var, 0),
+            "calibration_y": get(self.cal_y_var, 0),
+            "hotkey_start": get(self.hotkey_vars["start"], "f8"),
+            "hotkey_stop": get(self.hotkey_vars["stop"], "f9"),
+            "hotkey_pause": get(self.hotkey_vars["pause"], "f10"),
+            "hotkey_play": get(self.hotkey_vars["play"], "f12"),
+            "hotkey_emergency": get(self.hotkey_vars["emergency"], "esc"),
+        })
+        self.settings = sanitize_settings(updated)
+        save_settings(self.settings)
+        self.engine.configure(self.settings)
+        self.on_speed_change()
+
+    def save_and_restart_hotkeys(self):
+        vals = [v.get() for v in self.hotkey_vars.values()]
+        if len(set(vals)) != len(vals):
+            messagebox.showerror("Hotkey Conflict", "Each action needs a different hotkey.")
+            return
+        self.save_vars()
+        self._start_hotkeys()
+        self.show_dashboard()
+        messagebox.showinfo("Hotkeys", "Hotkeys saved and restarted.")
+
+    def _key_matches(self, key_obj, name):
+        try:
+            if name == "esc": return key_obj == keyboard.Key.esc
+            if name.startswith("f") and name[1:].isdigit(): return key_obj == getattr(keyboard.Key, name)
+        except Exception:
+            return False
+        return False
+
+    def _start_hotkeys(self):
+        if keyboard is None:
+            return
+        if self.global_hotkey_listener:
+            try: self.global_hotkey_listener.stop()
+            except Exception: pass
+        def on_press(k):
+            try:
+                if self._key_matches(k, self.hotkey_vars["emergency"].get()): self.after(0, self.emergency_stop)
+                elif self._key_matches(k, self.hotkey_vars["start"].get()): self.after(0, self.start_recording)
+                elif self._key_matches(k, self.hotkey_vars["stop"].get()): self.after(0, self.stop_recording)
+                elif self._key_matches(k, self.hotkey_vars["pause"].get()): self.after(0, self.pause_resume)
+                elif self._key_matches(k, self.hotkey_vars["play"].get()): self.after(0, self.confirm_playback)
+            except Exception as exc:
+                log_error("global_hotkey", exc)
+        try:
+            self.global_hotkey_listener = keyboard.Listener(on_press=on_press)
+            self.global_hotkey_listener.daemon = True
+            self.global_hotkey_listener.start()
+        except Exception as exc:
+            log_error("start_hotkeys", exc)
+
+    def start_recording(self):
+        try:
+            if self.engine.state != STATE_IDLE:
+                return
+            self.apply_mode(self.mode_var.get())
+            self.save_vars()
+            self.record_start_time = time.time()
+            self.action_count_var.set("Actions: 0")
+            self.show_floating()
+            self.withdraw()
+            self.update_app_regions()
+            self.engine.start_recording()
+            self._timer_tick()
+        except Exception as exc:
+            log_error("start_recording", exc, json.dumps(self.settings, default=str))
+            self.hide_floating(); self.deiconify()
+            messagebox.showerror("Recording Error", f"{exc}\n\nDetails saved to error_log.txt")
+
+    def stop_recording(self):
+        try:
+            path = self.engine.stop_recording()
+            if not path:
+                return
+            self.hide_floating(); self.deiconify(); self.lift()
+            if self.timer_job:
+                try: self.after_cancel(self.timer_job)
+                except Exception: pass
+                self.timer_job = None
+            self.settings["last_recording"] = str(path)
+            self.loaded_file_var.set(str(path))
+            self.action_count_var.set(self.counts_text())
+            save_settings(self.settings)
+            if self.run_behavior_var.get() == "after_save":
+                self.after(600, self.confirm_playback)
+            else:
+                messagebox.showinfo("Saved", f"Recording saved:\n{path}\n\n{self.counts_text()}")
+        except Exception as exc:
+            log_error("stop_recording", exc)
+            self.hide_floating(); self.deiconify()
+            messagebox.showerror("Stop Error", f"{exc}\n\nDetails saved to error_log.txt")
+
+    def pause_resume(self):
+        if self.engine.state in {STATE_RECORDING, STATE_RECORDING_PAUSED}:
+            self.engine.pause_resume_recording()
+        elif self.engine.state in {STATE_PLAYING, STATE_PLAYING_PAUSED}:
+            self.engine.pause_resume_playback()
+
+    def emergency_stop(self):
+        if self.engine.state in {STATE_PLAYING, STATE_PLAYING_PAUSED}:
+            self.engine.stop_playback()
