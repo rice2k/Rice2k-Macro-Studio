@@ -1,0 +1,246 @@
+            mi = monitor_info_for_point(px, py)
+            uia = {"control_name": "", "control_type": "", "automation_id": "", "control_class": "", "framework_id": "", "uia_supported": False}
+            if action_type == "click" and self.settings.get("record_smart_targets", True):
+                uia = uia_element_at_point(px, py)
+            dynamic_rule = ""
+            if action_type == "click" and self.settings.get("calendar_today_enabled", True):
+                if looks_like_today_label(uia.get("control_name", "")):
+                    dynamic_rule = "today"
+            return asdict(RecordedAction(
+                type=action_type,
+                time_from_start=round(now - self.start_time, 4),
+                time_since_last=round(now - self.last_event_time, 4),
+                window_title=wi.get("title", ""),
+                process_name=wi.get("process", ""),
+                pid=int(wi.get("pid", 0) or 0),
+                hwnd=int(wi.get("hwnd", 0) or 0),
+                window_rect=wi.get("rect"),
+                virtual_left=virtual["left"],
+                virtual_top=virtual["top"],
+                virtual_width=virtual["width"],
+                virtual_height=virtual["height"],
+                monitor_name=mi.get("name", ""),
+                monitor_bounds=mi.get("bounds"),
+                dpi=dpi_for_window(wi.get("hwnd", 0)),
+                **kwargs,
+            ))
+
+        def on_move(x, y):
+            if not self._record_allowed() or not self.settings.get("record_mouse_moves"):
+                return
+            if self._in_app_region(int(x), int(y)):
+                return
+            if time.time() - self.last_event_time < 0.025:
+                return
+            action = make_action("move", x=int(x), y=int(y))
+            self._append(action)
+            if debug:
+                self.log_callback(f"MOVE {x},{y}")
+
+        def on_click(x, y, button, pressed):
+            if not self._record_allowed() or self._in_app_region(int(x), int(y)):
+                return
+            action = make_action("click", x=int(x), y=int(y), button=str(button).replace("Button.", ""), pressed=bool(pressed))
+            self._append(action)
+            target = action.get("control_name") or action.get("control_type") or "coordinate"
+            rule = f" | dynamic={action.get('dynamic_rule')}" if action.get("dynamic_rule") else ""
+            self.log_callback(f"CLICK {action['button']} {'down' if pressed else 'up'} @ {x},{y} | {action['process_name']} | {action['window_title']} | target={target}{rule}")
+
+        def on_scroll(x, y, dx, dy):
+            if not self._record_allowed() or not self.settings.get("record_scroll", True):
+                return
+            if self._in_app_region(int(x), int(y)):
+                return
+            action = make_action("scroll", x=int(x), y=int(y), dx=int(dx), dy=int(dy))
+            self._append(action)
+            self.log_callback(f"SCROLL dx={dx} dy={dy} @ {x},{y} | {action['window_title']}")
+
+        def on_key_press(k):
+            if not self._record_allowed():
+                return
+            name, kind = key_name(k)
+            if name.lower() in self.hotkey_names:
+                return
+            action = make_action("key", key=name, key_kind=kind, pressed=True)
+            self._append(action)
+            label = "*" if kind == "char" and len(name) == 1 else name
+            self.log_callback(f"KEY DOWN {label} | {action['window_title']}")
+
+        def on_key_release(k):
+            if not self._record_allowed():
+                return
+            name, kind = key_name(k)
+            if name.lower() in self.hotkey_names:
+                return
+            action = make_action("key", key=name, key_kind=kind, pressed=False)
+            self._append(action)
+
+        if want_mouse_listener:
+            kwargs = {}
+            if want_mouse_clicks:
+                kwargs["on_click"] = on_click
+            if want_moves:
+                kwargs["on_move"] = on_move
+            if want_scroll:
+                kwargs["on_scroll"] = on_scroll
+            self.mouse_listener = mouse.Listener(**kwargs)
+            self.mouse_listener.start()
+
+        if want_keyboard:
+            self.keyboard_listener = keyboard.Listener(on_press=on_key_press, on_release=on_key_release)
+            self.keyboard_listener.start()
+
+        self.status_callback("Recording")
+        self.log_callback("Recording started.")
+
+    def pause_resume_recording(self):
+        if self.state == STATE_RECORDING:
+            self.state = STATE_RECORDING_PAUSED
+            self.status_callback("Recording paused")
+            self.log_callback("Recording paused.")
+        elif self.state == STATE_RECORDING_PAUSED:
+            self.state = STATE_RECORDING
+            self.last_event_time = time.time()
+            self.status_callback("Recording")
+            self.log_callback("Recording resumed.")
+
+    def stop_recording(self):
+        if self.state not in {STATE_RECORDING, STATE_RECORDING_PAUSED}:
+            return None
+        self.state = STATE_IDLE
+        for name in ["mouse_listener", "keyboard_listener"]:
+            listener = getattr(self, name)
+            if listener:
+                try:
+                    listener.stop()
+                except Exception:
+                    pass
+                setattr(self, name, None)
+
+        actions = self.snapshot_actions()
+        smart = build_smart_actions(actions)
+        file_path = RECORDINGS_DIR / f"recording_{now_stamp()}.json"
+        payload = {
+            "app": APP_NAME,
+            "version": APP_VERSION,
+            "created": datetime.datetime.now().isoformat(),
+            "action_count": len(actions),
+            "smart_action_count": len(smart),
+            "actions": actions,
+            "smart_actions": smart,
+        }
+        file_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        self.current_file = str(file_path)
+        self.status_callback("Ready")
+        self.log_callback(f"Recording stopped. Saved: {file_path}")
+        try:
+            RECOVERY_JOURNAL.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return file_path
+
+    def load_recording(self, path):
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        actions = data.get("actions", [])
+        if not isinstance(actions, list):
+            raise ValueError("Recording file has an invalid actions list.")
+        with self.action_lock:
+            self.actions = actions
+        self.current_file = str(path)
+        self.log_callback(f"Loaded recording: {path}")
+        return data
+
+    def load_recovery_journal(self):
+        if not RECOVERY_JOURNAL.exists():
+            return 0
+        recovered = []
+        for line in RECOVERY_JOURNAL.read_text(encoding="utf-8").splitlines():
+            try:
+                recovered.append(json.loads(line))
+            except Exception:
+                continue
+        with self.action_lock:
+            self.actions = recovered
+        return len(recovered)
+
+    def _wait_interruptible(self, seconds):
+        remaining = max(0.0, float(seconds))
+        while remaining > 0:
+            if self.stop_event.is_set():
+                return False
+            if self.pause_event.is_set():
+                self.stop_event.wait(timeout=0.02)
+                continue
+            chunk = min(0.02, remaining)
+            started = time.perf_counter()
+            self.stop_event.wait(timeout=chunk)
+            if self.stop_event.is_set():
+                return False
+            remaining -= max(0.0, time.perf_counter() - started)
+        return not self.stop_event.is_set()
+
+    def pause_resume_playback(self):
+        if self.state == STATE_PLAYING:
+            self.state = STATE_PLAYING_PAUSED
+            self.pause_event.set()
+            self.status_callback("Playback paused")
+        elif self.state == STATE_PLAYING_PAUSED:
+            self.state = STATE_PLAYING
+            self.pause_event.clear()
+            self.status_callback("Playing")
+
+    def stop_playback(self):
+        self.stop_event.set()
+        self.pause_event.clear()
+        self.status_callback("Stopping")
+
+    def _map_point(self, action, current_virtual, cal_x, cal_y):
+        rw = int(action.get("virtual_width") or current_virtual["width"])
+        rh = int(action.get("virtual_height") or current_virtual["height"])
+        rl = int(action.get("virtual_left") or 0)
+        rt = int(action.get("virtual_top") or 0)
+        nx = (int(action.get("x", 0)) - rl) / rw if rw else 0
+        ny = (int(action.get("y", 0)) - rt) / rh if rh else 0
+        x = current_virtual["left"] + round(nx * current_virtual["width"]) + cal_x
+        y = current_virtual["top"] + round(ny * current_virtual["height"]) + cal_y
+        x = max(current_virtual["left"], min(current_virtual["left"] + current_virtual["width"] - 1, x))
+        y = max(current_virtual["top"], min(current_virtual["top"] + current_virtual["height"] - 1, y))
+        return x, y
+
+    def _target_matches(self, action):
+        if not self.settings.get("target_validation", True):
+            return True
+
+        recorded_process = (action.get("process_name") or "").strip().lower()
+        recorded_title = (action.get("window_title") or "").strip().lower()
+        if not recorded_process and not recorded_title:
+            return True
+
+        current = active_window_info()
+        current_process = (current.get("process") or "").strip().lower()
+        current_title = (current.get("title") or "").strip().lower()
+
+        process_match = True
+        title_match = True
+
+        if recorded_process:
+            process_match = bool(current_process) and recorded_process == current_process
+
+        if recorded_title:
+            if not current_title:
+                title_match = False
+            else:
+                title_match = (
+                    recorded_title == current_title
+                    or recorded_title in current_title
+                    or current_title in recorded_title
+                )
+
+        # When both were recorded, require both. This prevents an Edge/Chrome/Office
+        # process-name match from silently accepting the wrong window/tab/document.
+        return process_match and title_match
+
+    def playback(self, update_callback=None):
+        if self.state != STATE_IDLE:
+            raise RuntimeError(f"Cannot start playback while state is {self.state}.")
+        if pyautogui is None:
