@@ -1,0 +1,87 @@
+# Rice2k Macro Studio v1.4.2 follow-up state fix
+# Keeps active sidebar highlights stable after hover/leave and keeps Settings open after save.
+
+APP_VERSION = "1.4.2 Theme Runtime Fix"
+
+_v142a_base_build_style = MouseRecorderApp._build_style
+
+
+def _v142a_build_style(self):
+    _v142a_base_build_style(self)
+    c = self.colors()
+    # General page controls should inherit the page panel, not a stale card color.
+    self.style.configure(
+        "TCheckbutton",
+        background=c["panel"], foreground=c["text"],
+        font=(self.ui_font, 10), padding=(2, 2), focusthickness=0,
+    )
+    self.style.map(
+        "TCheckbutton",
+        background=[("active", c["panel"]), ("focus", c["panel"]), ("disabled", c["panel"])],
+        foreground=[("disabled", c["disabled_fg"]), ("active", c["text"]), ("focus", c["text"])],
+        indicatorcolor=[("selected", c["accent"]), ("!selected", c["input_bg"]), ("disabled", c["disabled_bg"])],
+    )
+    self.style.configure(
+        "TRadiobutton",
+        background=c["panel"], foreground=c["text"],
+        font=(self.ui_font, 10), padding=(2, 2), focusthickness=0,
+    )
+    self.style.map(
+        "TRadiobutton",
+        background=[("active", c["panel"]), ("focus", c["panel"]), ("disabled", c["panel"])],
+        foreground=[("disabled", c["disabled_fg"]), ("active", c["text"]), ("focus", c["text"])],
+        indicatorcolor=[("selected", c["accent"]), ("!selected", c["input_bg"]), ("disabled", c["disabled_bg"])],
+    )
+
+
+def _v142a_set_sidebar_active(self, label):
+    c = self.colors()
+    aliases = {
+        "Smart Actions": "Smart Targets",
+        "Exports": "Export",
+        "Automation": "Web Capture",
+        "Calendar Guide": "Calendar",
+        "Help & Guide": "Help",
+    }
+    target = aliases.get(label, label)
+    for name, btn in getattr(self, "sidebar_buttons", {}).items():
+        try:
+            # Remove the generic hover callbacks. They remembered the old normal
+            # color and could erase the active-page highlight on mouse-leave.
+            btn.unbind("<Enter>")
+            btn.unbind("<Leave>")
+            if name == target:
+                active_fg = "#06130A" if self.theme_var.get() == "neo_green" else "#FFFFFF"
+                btn.configure(
+                    state="normal",
+                    bg=c["accent_pressed"], fg=active_fg,
+                    activebackground=c["accent"], activeforeground=active_fg,
+                )
+                btn.bind("<Enter>", lambda _e, b=btn, bg=c["accent"]: b.configure(bg=bg), add="+")
+                btn.bind("<Leave>", lambda _e, b=btn, bg=c["accent_pressed"]: b.configure(bg=bg), add="+")
+            else:
+                btn.configure(
+                    state="normal",
+                    bg=c["panel2"], fg=c["sub"],
+                    activebackground=c["panel3"], activeforeground=c["text"],
+                )
+                btn.bind("<Enter>", lambda _e, b=btn, bg=c["panel3"]: b.configure(bg=bg), add="+")
+                btn.bind("<Leave>", lambda _e, b=btn, bg=c["panel2"]: b.configure(bg=bg), add="+")
+        except Exception as exc:
+            log_error("sidebar_active_state", exc, f"button={name} target={target}")
+
+
+def _v142a_save_and_restart_hotkeys(self):
+    vals = [v.get() for v in self.hotkey_vars.values()]
+    if len(set(vals)) != len(vals):
+        messagebox.showerror("Hotkey Conflict", "Each action needs a different hotkey.")
+        return
+    self.save_vars()
+    self._start_hotkeys()
+    self.show_settings()
+    messagebox.showinfo("Settings", "Settings saved. Global hotkeys were restarted.")
+
+
+MouseRecorderApp._build_style = _v142a_build_style
+MouseRecorderApp._set_sidebar_active = _v142a_set_sidebar_active
+MouseRecorderApp.save_and_restart_hotkeys = _v142a_save_and_restart_hotkeys
