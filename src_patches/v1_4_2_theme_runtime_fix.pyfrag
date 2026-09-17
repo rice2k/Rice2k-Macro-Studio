@@ -1,0 +1,247 @@
+# ============================================================================
+# Rice2k Macro Studio v1.4.2 - Theme Runtime + Button State Fix
+# Fixes mixed-theme widgets, stale hover colors, and theme selector behavior.
+# ============================================================================
+APP_VERSION = "1.4.2 Theme Runtime Fix"
+
+# Final palettes are deliberately complete because the v1.3 visual shell expects
+# card/card_alt/border_soft in addition to the original theme keys.
+THEMES.clear()
+THEMES.update({
+    "dark": {
+        "bg": "#06111F", "panel": "#0B1A2B", "panel2": "#071522",
+        "panel3": "#10263D", "card": "#0A1929", "card_alt": "#0D2034",
+        "text": "#F4F8FF", "sub": "#A6BED8",
+        "accent": "#0B83FF", "accent_hover": "#2296FF", "accent_pressed": "#086DDA",
+        "accent2": "#20D6C2", "warning": "#FFC53D", "danger": "#FF3B4D",
+        "danger_hover": "#FF5968", "success": "#26DB7A",
+        "border": "#204B73", "border_soft": "#173A5A",
+        "input_bg": "#081423", "select_bg": "#145A96",
+        "disabled_bg": "#142437", "disabled_fg": "#647A91",
+    },
+    "neo_green": {
+        "bg": "#040B07", "panel": "#08140E", "panel2": "#06100B",
+        "panel3": "#0D281A", "card": "#091910", "card_alt": "#0D2417",
+        "text": "#DEFFE9", "sub": "#86C9A2",
+        "accent": "#32F57D", "accent_hover": "#58FF98", "accent_pressed": "#1BC965",
+        "accent2": "#00DFA5", "warning": "#D7FF58", "danger": "#FF5870",
+        "danger_hover": "#FF7388", "success": "#41E99B",
+        "border": "#1B6A43", "border_soft": "#123E29",
+        "input_bg": "#050F09", "select_bg": "#155136",
+        "disabled_bg": "#0E2116", "disabled_fg": "#5E826D",
+    },
+    "light": {
+        "bg": "#DCE7F1", "panel": "#EAF1F7", "panel2": "#D4E1EC",
+        "panel3": "#C7D8E7", "card": "#F2F6F9", "card_alt": "#E2ECF4",
+        "text": "#112D43", "sub": "#48657B",
+        "accent": "#087D8C", "accent_hover": "#1095A5", "accent_pressed": "#086875",
+        "accent2": "#35C79C", "warning": "#8A6200", "danger": "#B84960",
+        "danger_hover": "#C85F74", "success": "#207B59",
+        "border": "#AEC4D6", "border_soft": "#C4D4E1",
+        "input_bg": "#F9FBFD", "select_bg": "#C9E3EE",
+        "disabled_bg": "#D8E2EA", "disabled_fg": "#758A9A",
+    },
+})
+
+_v142_base_build_style = MouseRecorderApp._build_style
+_v142_base_build_layout = MouseRecorderApp._build_layout
+_v142_base_show_settings = MouseRecorderApp.show_settings
+
+
+def _v142_build_style(self):
+    _v142_base_build_style(self)
+    c = self.colors()
+    # The Neo Green primary action is bright enough that dark text is more legible.
+    if self.theme_var.get() == "neo_green":
+        self.style.configure("Primary.TButton", foreground="#041009")
+        self.style.map(
+            "Primary.TButton",
+            foreground=[
+                ("disabled", c["disabled_fg"]), ("pressed", "#041009"),
+                ("active", "#041009"), ("focus", "#041009")
+            ],
+        )
+    # Keep standard/secondary controls explicit in every interaction state.
+    self.style.map(
+        "TButton",
+        background=[
+            ("disabled", c["disabled_bg"]), ("pressed", c["select_bg"]),
+            ("active", c["card_alt"]), ("focus", c["card_alt"])
+        ],
+        foreground=[
+            ("disabled", c["disabled_fg"]), ("pressed", c["text"]),
+            ("active", c["text"]), ("focus", c["text"])
+        ],
+    )
+
+
+def _v142_find_widgets(parent):
+    for child in parent.winfo_children():
+        yield child
+        yield from _v142_find_widgets(child)
+
+
+def _v142_build_layout(self):
+    _v142_base_build_layout(self)
+    # Rewire the header Theme control so it performs a real theme change rather
+    # than merely opening Settings. All buttons are confirmed normal/enabled.
+    for widget in _v142_find_widgets(self):
+        try:
+            text = str(widget.cget("text"))
+        except Exception:
+            text = ""
+        if isinstance(widget, tk.Button):
+            try:
+                widget.configure(state="normal")
+            except Exception:
+                pass
+            if "Theme" in text:
+                widget.configure(command=self.cycle_theme)
+        if isinstance(widget, tk.Label):
+            try:
+                label_text = str(widget.cget("text"))
+                if label_text.strip() == "v1.4.1":
+                    widget.configure(text="  v1.4.2")
+            except Exception:
+                pass
+
+
+def _v142_page_method(self, page_name):
+    pages = {
+        "Dashboard": self.show_dashboard,
+        "Recordings": self.show_recordings,
+        "Web Capture": self.show_automation,
+        "Automation": self.show_automation,
+        "Smart Targets": self.show_smart_actions,
+        "Smart Actions": self.show_smart_actions,
+        "Calendar": self.show_calendar_guide,
+        "Calendar Guide": self.show_calendar_guide,
+        "Settings": self.show_settings,
+        "Diagnostics": self.show_diagnostics,
+        "Export": self.show_exports,
+        "Exports": self.show_exports,
+        "Help": self.show_help,
+        "Help & Guide": self.show_help,
+    }
+    return pages.get(page_name, self.show_dashboard)
+
+
+def _v142_apply_theme(self, theme_key, reopen_page=None):
+    if theme_key not in THEMES:
+        theme_key = "dark"
+    try:
+        if getattr(self.engine, "state", STATE_IDLE) != STATE_IDLE:
+            messagebox.showwarning(
+                "Theme Change",
+                "Stop recording or playback before changing the theme."
+            )
+            return False
+    except Exception:
+        pass
+
+    page = reopen_page or self.current_screen.get() or "Dashboard"
+    self.theme_var.set(theme_key)
+    self.settings["theme"] = theme_key
+    try:
+        save_settings(self.settings)
+    except Exception as exc:
+        log_error("save_theme", exc)
+
+    try:
+        if getattr(self, "clock_job", None):
+            self.after_cancel(self.clock_job)
+            self.clock_job = None
+    except Exception:
+        pass
+    try:
+        self.unbind_all("<MouseWheel>")
+        self.unbind_all("<Button-4>")
+        self.unbind_all("<Button-5>")
+    except Exception:
+        pass
+
+    # Clear option-database colors left by the previous theme, then rebuild the
+    # entire shell. This also recreates raw Tk buttons and their hover bindings.
+    try:
+        self.option_clear()
+    except Exception:
+        pass
+    for child in list(self.winfo_children()):
+        try:
+            child.destroy()
+        except Exception:
+            pass
+
+    self._build_style()
+    self._build_layout()
+    method = _v142_page_method(self, page)
+    if page not in {"Dashboard", "Recording Dashboard"}:
+        self.after_idle(method)
+    return True
+
+
+def _v142_cycle_theme(self):
+    order = ["dark", "neo_green", "light"]
+    current = self.theme_var.get()
+    try:
+        nxt = order[(order.index(current) + 1) % len(order)]
+    except ValueError:
+        nxt = "dark"
+    self.apply_theme(nxt)
+
+
+def _v142_show_settings(self):
+    self.current_screen.set("Settings")
+    self.clear_content()
+    outer = self.scroll_frame(self.panel())
+    c = self.colors()
+    body = tk.Frame(outer, bg=c["card"], highlightthickness=1, highlightbackground=c["border_soft"])
+    body.grid(row=0, column=0, padx=18, pady=10)
+    body.grid_columnconfigure(1, weight=1)
+
+    tk.Label(body, text="Settings", bg=c["card"], fg=c["text"], font=(self.ui_font, 15, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", padx=18, pady=(16, 3))
+    tk.Label(body, text="Customize appearance, countdown, timing behavior, and global hotkeys.", bg=c["card"], fg=c["sub"], font=(self.ui_font, 9)).grid(row=1, column=0, columnspan=2, sticky="w", padx=18, pady=(0, 12))
+
+    display_to_key = {"Dark": "dark", "Neo Green": "neo_green", "Soft Light": "light"}
+    key_to_display = {v: k for k, v in display_to_key.items()}
+    theme_choice = tk.StringVar(value=key_to_display.get(self.theme_var.get(), "Dark"))
+
+    tk.Label(body, text="Theme", bg=c["card"], fg=c["text"], font=(self.ui_font, 10)).grid(row=2, column=0, sticky="w", padx=18, pady=7)
+    theme_box = ttk.Combobox(body, textvariable=theme_choice, values=list(display_to_key), state="readonly", width=18)
+    theme_box.grid(row=2, column=1, sticky="w", padx=18, pady=7)
+    self.tip(theme_box, "Applies immediately. Dark is navy, Neo Green is black/green, and Soft Light is a muted blue-gray theme.")
+    def choose_theme(_event=None):
+        key = display_to_key.get(theme_choice.get(), "dark")
+        self.apply_theme(key, reopen_page="Settings")
+    theme_box.bind("<<ComboboxSelected>>", choose_theme)
+
+    tk.Label(body, text="Theme changes apply immediately and are saved automatically.", bg=c["card"], fg=c["sub"], font=(self.ui_font, 8)).grid(row=3, column=0, columnspan=2, sticky="w", padx=18, pady=(0, 10))
+
+    tk.Label(body, text="Countdown", bg=c["card"], fg=c["text"], font=(self.ui_font, 10)).grid(row=4, column=0, sticky="w", padx=18, pady=7)
+    countdown = ttk.Spinbox(body, from_=0, to=30, textvariable=self.countdown_var, width=9, command=self.save_vars)
+    countdown.grid(row=4, column=1, sticky="w", padx=18, pady=7)
+    ttk.Checkbutton(body, text="Human-like small timing variation", variable=self.human_like_var, command=self.save_vars, style="Compact.TCheckbutton").grid(row=5, column=0, columnspan=2, sticky="w", padx=18, pady=(5, 12))
+
+    tk.Frame(body, bg=c["border_soft"], height=1).grid(row=6, column=0, columnspan=2, sticky="ew", padx=18, pady=5)
+    tk.Label(body, text="Hotkeys", bg=c["card"], fg=c["text"], font=(self.ui_font, 12, "bold")).grid(row=7, column=0, columnspan=2, sticky="w", padx=18, pady=(10, 6))
+    choices = ["f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "esc"]
+    row = 8
+    for name, label in [("start", "Start"), ("stop", "Stop + Save"), ("pause", "Pause / Resume"), ("play", "Play"), ("emergency", "Emergency Stop")]:
+        tk.Label(body, text=label, bg=c["card"], fg=c["text"], font=(self.ui_font, 10)).grid(row=row, column=0, sticky="w", padx=18, pady=5)
+        box = ttk.Combobox(body, textvariable=self.hotkey_vars[name], values=choices, state="readonly", width=11)
+        box.grid(row=row, column=1, sticky="w", padx=18, pady=5)
+        row += 1
+
+    buttons = tk.Frame(body, bg=c["card"])
+    buttons.grid(row=row, column=0, columnspan=2, sticky="ew", padx=18, pady=(12, 16))
+    save_btn = ttk.Button(buttons, text="Save Settings + Restart Hotkeys", style="Primary.TButton", command=self.save_and_restart_hotkeys)
+    save_btn.pack(side="left", padx=(0, 7))
+    open_btn = ttk.Button(buttons, text="Open App Folder", command=lambda: open_folder(APP_DIR))
+    open_btn.pack(side="left", padx=7)
+
+
+MouseRecorderApp._build_style = _v142_build_style
+MouseRecorderApp._build_layout = _v142_build_layout
+MouseRecorderApp.apply_theme = _v142_apply_theme
+MouseRecorderApp.cycle_theme = _v142_cycle_theme
+MouseRecorderApp.show_settings = _v142_show_settings
