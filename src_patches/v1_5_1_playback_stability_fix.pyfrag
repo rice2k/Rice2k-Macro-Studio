@@ -1,0 +1,186 @@
+# Rice2k Macro Studio v1.5.1 - Playback Stability Fix
+# Keeps dense/high-speed playback cooperative and allows foreground-window changes
+# during normal playback without pausing/stopping.
+
+APP_VERSION = "1.5.1 Playback Stability Fix"
+
+DEFAULT_SETTINGS.update({
+    "pause_on_target_change": False,
+    "allow_window_switch_during_playback": True,
+    "playback_safety_throttle_ms": 3,
+})
+
+_v151_prev_sanitize = sanitize_settings
+def sanitize_settings(raw):
+    data = _v151_prev_sanitize(raw)
+    data["pause_on_target_change"] = _safe_bool(data.get("pause_on_target_change"), False)
+    data["allow_window_switch_during_playback"] = _safe_bool(
+        data.get("allow_window_switch_during_playback"), True
+    )
+    data["playback_safety_throttle_ms"] = _safe_int(
+        data.get("playback_safety_throttle_ms"), 3, 0, 20
+    )
+    return data
+
+
+# Add GUI variables without replacing the full existing initializer.
+_v151_prev_init = MouseRecorderApp.__init__
+def _v151_init(self, *args, **kwargs):
+    _v151_prev_init(self, *args, **kwargs)
+    self.allow_window_switch_var = tk.BooleanVar(
+        value=bool(self.settings.get("allow_window_switch_during_playback", True))
+    )
+    self.playback_throttle_var = tk.IntVar(
+        value=int(self.settings.get("playback_safety_throttle_ms", 3))
+    )
+    try:
+        self.pause_target_var.set(bool(self.settings.get("pause_on_target_change", False)))
+    except Exception:
+        pass
+
+
+_v151_prev_save_vars = MouseRecorderApp.save_vars
+def _v151_save_vars(self):
+    _v151_prev_save_vars(self)
+    self.settings["allow_window_switch_during_playback"] = bool(
+        self.allow_window_switch_var.get()
+    )
+    self.settings["playback_safety_throttle_ms"] = _safe_int(
+        self.playback_throttle_var.get(), 3, 0, 20
+    )
+    self.settings["pause_on_target_change"] = bool(self.pause_target_var.get())
+    self.settings = sanitize_settings(self.settings)
+    save_settings(self.settings)
+    self.engine.configure(self.settings)
+
+
+# If window switching is allowed, target matching is intentionally bypassed.
+_v151_prev_target_matches = RecorderEngine._target_matches
+def _v151_target_matches(self, action):
+    if self.settings.get("allow_window_switch_during_playback", True):
+        return True
+    return _v151_prev_target_matches(self, action)
+
+
+# The existing playback loop calls _wait_interruptible before every action.
+# Give zero/tiny delays a cooperative floor so dense macros cannot flood Windows.
+_v151_prev_wait_interruptible = RecorderEngine._wait_interruptible
+def _v151_wait_interruptible(self, seconds):
+    seconds = max(0.0, float(seconds))
+    if self.state in {STATE_PLAYING, STATE_PLAYING_PAUSED}:
+        throttle = max(
+            0.0,
+            min(
+                0.020,
+                float(self.settings.get("playback_safety_throttle_ms", 3)) / 1000.0,
+            ),
+        )
+        seconds = max(seconds, throttle)
+    return _v151_prev_wait_interruptible(self, seconds)
+
+
+# Keep normal modes permissive; Window-Aware intentionally turns strict protection on.
+_v151_prev_apply_mode = MouseRecorderApp.apply_mode
+def _v151_apply_mode(self, mode):
+    _v151_prev_apply_mode(self, mode)
+    if mode == "window_aware":
+        self.allow_window_switch_var.set(False)
+        self.pause_target_var.set(True)
+        self.target_validation_var.set(True)
+    else:
+        self.allow_window_switch_var.set(True)
+        self.pause_target_var.set(False)
+    self.save_vars()
+
+
+# Add explicit playback-stability controls to Settings without replacing the rest of the UI.
+_v151_prev_show_settings = MouseRecorderApp.show_settings
+def _v151_show_settings(self):
+    _v151_prev_show_settings(self)
+    try:
+        panel = self.content.winfo_children()[0]
+        # Locate the inner scroll frame if present.
+        descendants = []
+        stack = list(panel.winfo_children())
+        while stack:
+            w = stack.pop()
+            descendants.append(w)
+            stack.extend(w.winfo_children())
+        parent = next(
+            (w for w in descendants if isinstance(w, ttk.Frame) and str(w.cget("style")) == "Panel.TFrame"),
+            None,
+        )
+        if parent is None:
+            return
+        box = ttk.LabelFrame(parent, text="Playback Stability")
+        box.grid(sticky="ew", padx=12, pady=8)
+        keep = ttk.Checkbutton(
+            box,
+            text="Keep playing if I switch windows",
+            variable=self.allow_window_switch_var,
+            command=self.save_vars,
+        )
+        keep.pack(anchor="w", padx=12, pady=(8, 3))
+        ttk.Label(
+            box,
+            text="When enabled, changing the foreground window will not pause or stop physical playback.",
+            style="Help.TLabel",
+            wraplength=760,
+            justify="left",
+        ).pack(anchor="w", padx=12, pady=(0, 5))
+        row = ttk.Frame(box, style="Panel.TFrame")
+        row.pack(anchor="w", padx=12, pady=(2, 9))
+        ttk.Label(row, text="System-friendly action throttle (ms)", style="Panel.TLabel").pack(side="left")
+        throttle = ttk.Spinbox(
+            row,
+            from_=0,
+            to=20,
+            textvariable=self.playback_throttle_var,
+            width=6,
+            command=self.save_vars,
+        )
+        throttle.pack(side="left", padx=(10, 0))
+    except Exception as exc:
+        log_error("v1.5.1 settings playback stability panel", exc)
+
+
+# Standalone EXE runners get the same cooperative throttle.
+_v151_prev_runner_source = MouseRecorderApp._standalone_runner_source
+def _v151_standalone_runner_source(self, actions, recording_name="Rice2k Macro"):
+    source = _v151_prev_runner_source(self, actions, recording_name)
+    source = source.replace(
+        "pyautogui.PAUSE = 0\n",
+        "# Small delay prevents dense macros from monopolizing the Windows desktop.\n"
+        "pyautogui.PAUSE = 0.003\n"
+        "try:\n    pyautogui.MINIMUM_SLEEP = 0.003\nexcept Exception:\n    pass\n",
+        1,
+    )
+    source = source.replace(
+        "while pause_event.is_set() and not stop_event.is_set():\n            time.sleep(0.05)",
+        "while pause_event.is_set() and not stop_event.is_set():\n            stop_event.wait(0.03)",
+    )
+    source = source.replace(
+        "time.sleep(min(0.03, max(0.0, end - time.monotonic())))",
+        "stop_event.wait(min(0.03, max(0.0, end - time.monotonic())))",
+    )
+    marker = (
+        "                        else:\n"
+        "                            pyautogui.keyUp(k); held_keys.discard(k)\n"
+    )
+    addition = marker + (
+        "                # Cooperative yield keeps Windows responsive on zero-delay recordings.\n"
+        "                if typ in {\"move\", \"click\", \"scroll\", \"key\"}:\n"
+        "                    if not wait_interruptible(0.003): break\n"
+    )
+    if marker in source and "Cooperative yield keeps Windows responsive" not in source:
+        source = source.replace(marker, addition, 1)
+    return source
+
+
+MouseRecorderApp.__init__ = _v151_init
+MouseRecorderApp.save_vars = _v151_save_vars
+MouseRecorderApp.apply_mode = _v151_apply_mode
+MouseRecorderApp.show_settings = _v151_show_settings
+MouseRecorderApp._standalone_runner_source = _v151_standalone_runner_source
+RecorderEngine._target_matches = _v151_target_matches
+RecorderEngine._wait_interruptible = _v151_wait_interruptible
