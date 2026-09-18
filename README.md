@@ -6,7 +6,7 @@
 
 **A Windows macro recording and automation studio by Rice2k**
 
-![Version](https://img.shields.io/badge/version-1.4.2-0B83FF)
+![Version](https://img.shields.io/badge/version-1.5.1-0B83FF)
 ![Platform](https://img.shields.io/badge/platform-Windows-178BFF)
 ![UI](https://img.shields.io/badge/UI-Compact%20Polished-20D6C2)
 ![Status](https://img.shields.io/badge/status-active-26DB7A)
@@ -15,7 +15,7 @@
 
 Rice2k Macro Studio records and replays mouse clicks, keyboard input, scrolling, optional mouse movement, smart Windows UI targets, browser element actions, and dynamic calendar rules such as **TODAY**.
 
-## v1.4.2 — Theme Runtime Fix
+## v1.5.1 — Playback Stability Fix
 
 <div align="center">
 <img src="rice2k_macro_studio.png" width="128" alt="Rice2k Macro Studio icon">
@@ -45,6 +45,16 @@ Version **1.4.2** is the current release. It keeps the compact v1.4.1 layout and
 | **Soft Light** | Bright rooms / light preference | Muted blue-gray surfaces, not harsh white |
 
 See [v1.4.2 Theme Runtime Fix](docs/V1_4_2_THEME_RUNTIME_FIX.md) for the root-cause analysis and runtime behavior. The previous [v1.4.1 Compact Cleanup](docs/V1_4_1_COMPACT_CLEANUP.md) notes remain available for layout/theme design history.
+
+### Playback stability
+
+- **Keep playing if I switch windows** is enabled by default for normal playback.
+- Dense/high-speed recordings use a small **3 ms system-friendly action throttle** so Windows stays responsive.
+- **Window-Aware** mode still enables strict target protection when you need it.
+- Exported Standalone EXE macros receive the same cooperative throttle.
+- Esc / failsafe emergency stop and held-input cleanup remain available.
+
+> When window switching is allowed, physical mouse/keyboard playback continues on the active Windows desktop and can interact with whichever window is under the recorded coordinates.
 
 ## Navigation
 
