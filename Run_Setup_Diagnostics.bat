@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-title Rice2k Macro Studio v1.4.2 - Setup Diagnostics
+title Rice2k Macro Studio v1.5.1 - Setup Diagnostics
 cd /d "%~dp0"
 
 set "LOGDIR=%USERPROFILE%\Documents\Rice2k Macro Studio\Errors"
@@ -11,7 +11,7 @@ if not exist "%LOGDIR%" (
 )
 set "LOG=%LOGDIR%\setup_diagnostics.txt"
 
->"%LOG%" echo Rice2k Macro Studio v1.4.2 Setup Diagnostics
+>"%LOG%" echo Rice2k Macro Studio v1.5.1 Setup Diagnostics
 >>"%LOG%" echo Date: %DATE% %TIME%
 >>"%LOG%" echo Folder: %CD%
 >>"%LOG%" echo.
@@ -40,7 +40,7 @@ if defined PY_CMD (
   %PY_CMD% -c "import screeninfo; print('screeninfo OK')" >>"%LOG%" 2>&1
   %PY_CMD% -c "import pywinauto; print('pywinauto OK', pywinauto.__version__)" >>"%LOG%" 2>&1
   %PY_CMD% -m py_compile rice2k_macro_studio.py >>"%LOG%" 2>&1
-  %PY_CMD% -c "from pathlib import Path; parts=sorted(Path('src_fragments').glob('part_*.pyfrag')); patches=sorted(Path('src_patches').glob('*.pyfrag')); print('source fragments',len(parts)); print('source patches',[x.name for x in patches]); assert len(parts)==14, f'Expected 14 source fragments, found {len(parts)}'; assert len(patches)>=10, f'Expected at least 10 source patches, found {len(patches)}'; s=''.join(x.read_text(encoding='utf-8') for x in parts); marker='\nif __name__ == \"__main__\":\n    main()'; assert marker in s, 'main marker missing'; s=s.replace(marker,'\n\n'+'\n\n'.join(x.read_text(encoding='utf-8') for x in patches)+'\n\n'+marker,1); compile(s,'rice2k_macro_studio_full.py','exec'); print('full patched application source OK')" >>"%LOG%" 2>&1
+  %PY_CMD% -c "from pathlib import Path; parts=sorted(Path('src_fragments').glob('part_*.pyfrag')); patches=sorted(Path('src_patches').glob('*.pyfrag')); print('source fragments',len(parts)); print('source patches',[x.name for x in patches]); assert len(parts)==14, f'Expected 14 source fragments, found {len(parts)}'; assert len(patches)>=12, f'Expected at least 10 source patches, found {len(patches)}'; s=''.join(x.read_text(encoding='utf-8') for x in parts); marker='\nif __name__ == \"__main__\":\n    main()'; assert marker in s, 'main marker missing'; s=s.replace(marker,'\n\n'+'\n\n'.join(x.read_text(encoding='utf-8') for x in patches)+'\n\n'+marker,1); compile(s,'rice2k_macro_studio_full.py','exec'); print('full patched application source OK')" >>"%LOG%" 2>&1
 ) else (
   >>"%LOG%" echo ERROR: No working Python interpreter detected.
 )
