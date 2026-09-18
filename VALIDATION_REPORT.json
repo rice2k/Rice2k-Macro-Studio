@@ -1,38 +1,80 @@
 {
   "project": "Rice2k-Macro-Studio",
-  "version": "1.4.2 Theme Runtime Fix",
-  "validated_at": "2026-09-16T22:17:00-04:00",
-  "root_cause": "Theme selection changed theme_var before the existing shell was rebuilt. Existing Tk buttons kept old hover/leave colors while newly opened pages used the newly selected palette, producing mixed theme states. The generic sidebar hover handler could also erase the active-page highlight on mouse-leave.",
-  "summary": "97 live GUI/theme/page/button checks passed, 0 failures. Browser helper JavaScript and ZIP integrity also passed.",
+  "version": "1.5.1 Playback Stability Fix",
+  "validated_at": "2026-09-18T01:52:25.724087",
   "checks": [
-    {"name":"Python compile","status":"PASS"},
-    {"name":"No missing direct UI callbacks","status":"PASS"},
-    {"name":"Dark live theme apply","status":"PASS"},
-    {"name":"Neo Green live theme apply","status":"PASS"},
-    {"name":"Soft Light live theme apply","status":"PASS"},
-    {"name":"Theme persistence to settings.json","status":"PASS"},
-    {"name":"Dark sidebar hover/leave consistency","status":"PASS"},
-    {"name":"Neo Green sidebar hover/leave consistency","status":"PASS"},
-    {"name":"Soft Light sidebar hover/leave consistency","status":"PASS"},
-    {"name":"Top Theme cycle Dark -> Neo Green -> Light -> Dark","status":"PASS"},
-    {"name":"Settings save stays on Settings page","status":"PASS"},
-    {"name":"Dashboard in all themes","status":"PASS"},
-    {"name":"Recordings in all themes","status":"PASS"},
-    {"name":"Web Capture in all themes","status":"PASS"},
-    {"name":"Smart Targets in all themes","status":"PASS"},
-    {"name":"Calendar in all themes","status":"PASS"},
-    {"name":"Settings in all themes","status":"PASS"},
-    {"name":"Diagnostics in all themes","status":"PASS"},
-    {"name":"Exports in all themes","status":"PASS"},
-    {"name":"Help in all themes","status":"PASS"},
-    {"name":"Explicit button/check/radio/combobox/spinbox state colors","status":"PASS"},
-    {"name":"Mouse-wheel rebuild guard","status":"PASS"},
-    {"name":"Error log output","status":"PASS"},
-    {"name":"Browser helper outer JavaScript","status":"PASS"},
-    {"name":"Generated browser bookmarklet JavaScript","status":"PASS"},
-    {"name":"ZIP integrity","status":"PASS"}
+    {
+      "name": "Python compile",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Module import",
+      "status": "PASS",
+      "detail": "1.5.1 Playback Stability Fix"
+    },
+    {
+      "name": "Window switching default ON",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Pause-on-target-change default OFF",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Safety throttle default 3 ms",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Dense zero-delay playback remains cooperative",
+      "status": "PASS",
+      "detail": "0.621s / 400 pyautogui calls"
+    },
+    {
+      "name": "Foreground-window mismatch ignored when allowed",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Strict target protection still available",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Standalone runner source compiles",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Standalone runner throttle present",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "GUI playback-safety controls",
+      "status": "PASS",
+      "detail": "GUI_OK"
+    },
+    {
+      "name": "Browser helper JavaScript syntax",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "No missing direct UI callbacks",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "name": "ZIP integrity",
+      "status": "PASS",
+      "detail": ""
+    }
   ],
   "limitations": [
-    "Physical mouse/keyboard replay and Windows UI Automation require final live Windows testing."
+    "Physical mouse/keyboard replay and Windows UI Automation still require final live Windows testing."
   ]
 }
