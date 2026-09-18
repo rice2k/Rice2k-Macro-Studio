@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-title Rice2k Macro Studio v1.4.2 Launcher
+title Rice2k Macro Studio v1.5.1 Launcher
 cd /d "%~dp0"
 
 set "LOGDIR=%USERPROFILE%\Documents\Rice2k Macro Studio\Errors"
@@ -12,11 +12,11 @@ if not exist "%LOGDIR%" (
 set "LOG=%LOGDIR%\launcher_log.txt"
 
 >>"%LOG%" echo ================================================================================
->>"%LOG%" echo [%DATE% %TIME%] Rice2k Macro Studio v1.4.2 launcher starting
+>>"%LOG%" echo [%DATE% %TIME%] Rice2k Macro Studio v1.5.1 launcher starting
 >>"%LOG%" echo Package folder: %CD%
 
 echo.
-echo Rice2k Macro Studio v1.4.2
+echo Rice2k Macro Studio v1.5.1
 echo Checking files, Python, and startup requirements...
 echo.
 
@@ -82,7 +82,7 @@ if errorlevel 1 (
     exit /b 12
 )
 
-%PY_CMD% -c "from pathlib import Path; parts=sorted(Path('src_fragments').glob('part_*.pyfrag')); patches=sorted(Path('src_patches').glob('*.pyfrag')); assert len(parts)==14, f'Expected 14 source fragments, found {len(parts)}'; assert len(patches)>=10, f'Expected at least 10 version patches, found {len(patches)}'; s=''.join(x.read_text(encoding='utf-8') for x in parts); marker='\nif __name__ == \"__main__\":\n    main()'; assert marker in s, 'main marker missing'; s=s.replace(marker,'\n\n'+'\n\n'.join(x.read_text(encoding='utf-8') for x in patches)+'\n\n'+marker,1); compile(s,'rice2k_macro_studio_full.py','exec'); print('Full patched application source OK')" >>"%LOG%" 2>&1
+%PY_CMD% -c "from pathlib import Path; parts=sorted(Path('src_fragments').glob('part_*.pyfrag')); patches=sorted(Path('src_patches').glob('*.pyfrag')); assert len(parts)==14, f'Expected 14 source fragments, found {len(parts)}'; assert len(patches)>=12, f'Expected at least 10 version patches, found {len(patches)}'; s=''.join(x.read_text(encoding='utf-8') for x in parts); marker='\nif __name__ == \"__main__\":\n    main()'; assert marker in s, 'main marker missing'; s=s.replace(marker,'\n\n'+'\n\n'.join(x.read_text(encoding='utf-8') for x in patches)+'\n\n'+marker,1); compile(s,'rice2k_macro_studio_full.py','exec'); print('Full patched application source OK')" >>"%LOG%" 2>&1
 if errorlevel 1 (
     echo ERROR: Reconstructed application source failed validation.
     >>"%LOG%" echo ERROR: Reconstructed application source failed validation.
