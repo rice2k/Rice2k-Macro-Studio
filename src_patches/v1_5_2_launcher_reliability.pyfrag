@@ -1,0 +1,52 @@
+# Rice2k Macro Studio v1.5.2 - Launcher Reliability Fix
+# Adds a GUI startup self-test so the Windows launcher can verify Tk startup
+# before entering the normal main loop.
+
+APP_VERSION = "1.5.2 Launcher Reliability Fix"
+
+_v152_previous_main = main
+
+
+def startup_self_test():
+    install_global_error_logger()
+    write_startup_event("Startup self-test entry")
+    app = None
+    try:
+        ensure_folders()
+        enable_dpi_awareness()
+        app = MouseRecorderApp()
+        app.update_idletasks()
+        app.update()
+        write_startup_event("STARTUP SELF-TEST PASSED")
+        print("RICE2K_STARTUP_SELF_TEST_OK", flush=True)
+        return 0
+    except Exception as exc:
+        log_error("startup_self_test", exc)
+        write_startup_event(f"STARTUP SELF-TEST FAILED: {type(exc).__name__}: {exc}")
+        print(f"RICE2K_STARTUP_SELF_TEST_FAILED: {type(exc).__name__}: {exc}", flush=True)
+        return 31
+    finally:
+        if app is not None:
+            try:
+                listener = getattr(app, "global_hotkey_listener", None)
+                if listener:
+                    listener.stop()
+            except Exception:
+                pass
+            for job_name in ("log_drain_job", "timer_job", "clock_job"):
+                try:
+                    job = getattr(app, job_name, None)
+                    if job:
+                        app.after_cancel(job)
+                except Exception:
+                    pass
+            try:
+                app.destroy()
+            except Exception:
+                pass
+
+
+def main():
+    if "--startup-test" in sys.argv:
+        raise SystemExit(startup_self_test())
+    return _v152_previous_main()
