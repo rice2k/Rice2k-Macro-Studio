@@ -1,80 +1,22 @@
 {
   "project": "Rice2k-Macro-Studio",
-  "version": "1.5.1 Playback Stability Fix",
-  "validated_at": "2026-09-18T01:52:25.724087",
+  "version": "1.5.2 Launcher Reliability Fix",
+  "validated_at": "2026-09-19T23:18:00-04:00",
   "checks": [
-    {
-      "name": "Python compile",
-      "status": "PASS",
-      "detail": ""
-    },
-    {
-      "name": "Module import",
-      "status": "PASS",
-      "detail": "1.5.1 Playback Stability Fix"
-    },
-    {
-      "name": "Window switching default ON",
-      "status": "PASS",
-      "detail": ""
-    },
-    {
-      "name": "Pause-on-target-change default OFF",
-      "status": "PASS",
-      "detail": ""
-    },
-    {
-      "name": "Safety throttle default 3 ms",
-      "status": "PASS",
-      "detail": ""
-    },
-    {
-      "name": "Dense zero-delay playback remains cooperative",
-      "status": "PASS",
-      "detail": "0.621s / 400 pyautogui calls"
-    },
-    {
-      "name": "Foreground-window mismatch ignored when allowed",
-      "status": "PASS",
-      "detail": ""
-    },
-    {
-      "name": "Strict target protection still available",
-      "status": "PASS",
-      "detail": ""
-    },
-    {
-      "name": "Standalone runner source compiles",
-      "status": "PASS",
-      "detail": ""
-    },
-    {
-      "name": "Standalone runner throttle present",
-      "status": "PASS",
-      "detail": ""
-    },
-    {
-      "name": "GUI playback-safety controls",
-      "status": "PASS",
-      "detail": "GUI_OK"
-    },
-    {
-      "name": "Browser helper JavaScript syntax",
-      "status": "PASS",
-      "detail": ""
-    },
-    {
-      "name": "No missing direct UI callbacks",
-      "status": "PASS",
-      "detail": "[]"
-    },
-    {
-      "name": "ZIP integrity",
-      "status": "PASS",
-      "detail": ""
-    }
+    {"name": "Python source compile", "status": "PASS", "detail": ""},
+    {"name": "GUI startup self-test", "status": "PASS", "detail": "RICE2K_STARTUP_SELF_TEST_OK"},
+    {"name": "Full GUI remains running", "status": "PASS", "detail": "active after 5-second smoke window"},
+    {"name": "Resolved Python executable launcher", "status": "PASS", "detail": ""},
+    {"name": "PyInstaller removed from startup requirements", "status": "PASS", "detail": "Standalone EXE export installs/uses it only when needed"},
+    {"name": "Launcher runs GUI self-test before full startup", "status": "PASS", "detail": ""},
+    {"name": "Launcher stays open after application process exits", "status": "PASS", "detail": "including exit code 0"},
+    {"name": "Failure path prints launcher log tail", "status": "PASS", "detail": ""},
+    {"name": "Debug launcher", "status": "PASS", "detail": "Run_Rice2k_Macro_Studio_DEBUG.bat"},
+    {"name": "Open logs helper", "status": "PASS", "detail": "Open_Last_Startup_Logs.bat"},
+    {"name": "Setup diagnostics startup self-test", "status": "PASS", "detail": ""},
+    {"name": "ZIP integrity", "status": "PASS", "detail": ""}
   ],
   "limitations": [
-    "Physical mouse/keyboard replay and Windows UI Automation still require final live Windows testing."
+    "Windows CMD/BAT execution itself must be confirmed on the target Windows PC. The same Python GUI startup path passed under a virtual display."
   ]
 }
