@@ -1,22 +1,34 @@
 {
   "project": "Rice2k-Macro-Studio",
-  "version": "1.5.2 Launcher Reliability Fix",
-  "validated_at": "2026-09-19T23:18:00-04:00",
+  "version": "1.5.3 Recording Freeze Fix",
+  "validated_at": "2026-09-21T23:38:00-04:00",
   "checks": [
-    {"name": "Python source compile", "status": "PASS", "detail": ""},
+    {"name": "Python compile", "status": "PASS", "detail": ""},
+    {"name": "Module import", "status": "PASS", "detail": "1.5.3 Recording Freeze Fix"},
+    {"name": "No duplicate RecorderEngine methods", "status": "PASS", "detail": ""},
+    {"name": "No duplicate MouseRecorderApp methods", "status": "PASS", "detail": ""},
+    {"name": "No missing direct UI callbacks", "status": "PASS", "detail": ""},
     {"name": "GUI startup self-test", "status": "PASS", "detail": "RICE2K_STARTUP_SELF_TEST_OK"},
-    {"name": "Full GUI remains running", "status": "PASS", "detail": "active after 5-second smoke window"},
-    {"name": "Resolved Python executable launcher", "status": "PASS", "detail": ""},
-    {"name": "PyInstaller removed from startup requirements", "status": "PASS", "detail": "Standalone EXE export installs/uses it only when needed"},
-    {"name": "Launcher runs GUI self-test before full startup", "status": "PASS", "detail": ""},
-    {"name": "Launcher stays open after application process exits", "status": "PASS", "detail": "including exit code 0"},
-    {"name": "Failure path prints launcher log tail", "status": "PASS", "detail": ""},
-    {"name": "Debug launcher", "status": "PASS", "detail": "Run_Rice2k_Macro_Studio_DEBUG.bat"},
-    {"name": "Open logs helper", "status": "PASS", "detail": "Open_Last_Startup_Logs.bat"},
-    {"name": "Setup diagnostics startup self-test", "status": "PASS", "detail": ""},
+    {"name": "All primary pages under Dark / Neo Green / Light", "status": "PASS", "detail": ""},
+    {"name": "18-second heavy recording stress", "status": "PASS", "detail": "Elapsed reached 00:18 with 4,473 simulated actions"},
+    {"name": "UI watchdog stayed quiet during stress", "status": "PASS", "detail": ""},
+    {"name": "UI log queue remained responsive", "status": "PASS", "detail": ""},
+    {"name": "5,000-action recovery journal flush", "status": "PASS", "detail": "5,000/5,000 lines persisted"},
+    {"name": "Incremental counters", "status": "PASS", "detail": "5,000 move actions counted without full-list rescans"},
+    {"name": "Smart Target metadata persistence", "status": "PASS", "detail": "verified in downloadable monolithic build"},
+    {"name": "Browser helper outer JavaScript", "status": "PASS", "detail": ""},
+    {"name": "Browser bookmarklet JavaScript", "status": "PASS", "detail": ""},
+    {"name": "Standalone EXE runner source compiles", "status": "PASS", "detail": ""},
+    {"name": "Standalone EXE throttle retained", "status": "PASS", "detail": ""},
     {"name": "ZIP integrity", "status": "PASS", "detail": ""}
   ],
+  "root_cause_findings": [
+    "UI log draining could remain in an unbounded loop while producers kept adding events, starving Tk callbacks.",
+    "Recording statistics copied and rescanned the full action list repeatedly.",
+    "Recovery journal work was performed per action instead of in batches.",
+    "Monitor metadata was repeatedly queried during recording in the downloadable source build."
+  ],
   "limitations": [
-    "Windows CMD/BAT execution itself must be confirmed on the target Windows PC. The same Python GUI startup path passed under a virtual display."
+    "Physical mouse/keyboard hooks, real Windows UI Automation, and final Windows desktop responsiveness still require live testing on the target Windows PC."
   ]
 }
