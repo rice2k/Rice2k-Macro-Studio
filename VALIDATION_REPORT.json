@@ -1,34 +1,36 @@
 {
   "project": "Rice2k-Macro-Studio",
-  "version": "1.5.3 Recording Freeze Fix",
-  "validated_at": "2026-09-21T23:38:00-04:00",
+  "version": "1.5.4 Performance Hardening",
+  "validated_at": "2026-09-21T23:58:00-04:00",
   "checks": [
     {"name": "Python compile", "status": "PASS", "detail": ""},
-    {"name": "Module import", "status": "PASS", "detail": "1.5.3 Recording Freeze Fix"},
+    {"name": "GUI startup self-test", "status": "PASS", "detail": "RICE2K_STARTUP_SELF_TEST_OK"},
+    {"name": "25-second heavy recording stress", "status": "PASS", "detail": "15,497+ actions; elapsed reached 00:24; heartbeat remained responsive"},
+    {"name": "80,000-action asynchronous save", "status": "PASS", "detail": "UI remained responsive while an ~18 MB recording was written"},
+    {"name": "Raw Action Editor paging", "status": "PASS", "detail": "60,000+ action dataset rendered 2,000 rows"},
+    {"name": "Foreground-window metadata cache", "status": "PASS", "detail": "500 synthetic requests caused 2 refreshes"},
+    {"name": "Bounded UI Automation lookup", "status": "PASS", "detail": "1-second simulated stall returned in ~0.08 seconds"},
+    {"name": "Streaming recovery load", "status": "PASS", "detail": "12,000 JSONL actions recovered"},
+    {"name": "Dark / Neo Green / Soft Light primary pages", "status": "PASS", "detail": ""},
+    {"name": "Standalone EXE runner source compiles", "status": "PASS", "detail": ""},
+    {"name": "Browser helper JavaScript", "status": "PASS", "detail": ""},
+    {"name": "Generated browser bookmarklet JavaScript", "status": "PASS", "detail": ""},
     {"name": "No duplicate RecorderEngine methods", "status": "PASS", "detail": ""},
     {"name": "No duplicate MouseRecorderApp methods", "status": "PASS", "detail": ""},
-    {"name": "No missing direct UI callbacks", "status": "PASS", "detail": ""},
-    {"name": "GUI startup self-test", "status": "PASS", "detail": "RICE2K_STARTUP_SELF_TEST_OK"},
-    {"name": "All primary pages under Dark / Neo Green / Light", "status": "PASS", "detail": ""},
-    {"name": "18-second heavy recording stress", "status": "PASS", "detail": "Elapsed reached 00:18 with 4,473 simulated actions"},
-    {"name": "UI watchdog stayed quiet during stress", "status": "PASS", "detail": ""},
-    {"name": "UI log queue remained responsive", "status": "PASS", "detail": ""},
-    {"name": "5,000-action recovery journal flush", "status": "PASS", "detail": "5,000/5,000 lines persisted"},
-    {"name": "Incremental counters", "status": "PASS", "detail": "5,000 move actions counted without full-list rescans"},
-    {"name": "Smart Target metadata persistence", "status": "PASS", "detail": "verified in downloadable monolithic build"},
-    {"name": "Browser helper outer JavaScript", "status": "PASS", "detail": ""},
-    {"name": "Browser bookmarklet JavaScript", "status": "PASS", "detail": ""},
-    {"name": "Standalone EXE runner source compiles", "status": "PASS", "detail": ""},
-    {"name": "Standalone EXE throttle retained", "status": "PASS", "detail": ""},
+    {"name": "No missing direct UI callbacks", "status": "PASS", "detail": "[]"},
     {"name": "ZIP integrity", "status": "PASS", "detail": ""}
   ],
-  "root_cause_findings": [
-    "UI log draining could remain in an unbounded loop while producers kept adding events, starving Tk callbacks.",
-    "Recording statistics copied and rescanned the full action list repeatedly.",
-    "Recovery journal work was performed per action instead of in batches.",
-    "Monitor metadata was repeatedly queried during recording in the downloadable source build."
+  "performance_findings_fixed": [
+    "Repeated foreground process/title lookups during high-frequency recording",
+    "Repeated DPI lookup during recording",
+    "Potential UI Automation lookup stalls on slow applications",
+    "Stop + Save serialization running on the Tk UI thread",
+    "Recovery import loading the entire journal text at once",
+    "Large editor/preview rendering growth",
+    "Normal-mode key/scroll diagnostic log traffic",
+    "Browser Smart Capture repeatedly rendering the complete capture JSON"
   ],
   "limitations": [
-    "Physical mouse/keyboard hooks, real Windows UI Automation, and final Windows desktop responsiveness still require live testing on the target Windows PC."
+    "Physical mouse/keyboard hooks and real Windows UI Automation still require final live Windows testing on the target PC."
   ]
 }
