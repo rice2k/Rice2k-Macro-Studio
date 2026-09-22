@@ -1,0 +1,178 @@
+# Rice2k Macro Studio v1.5.6 - Minute Delay
+# Changes the repeat-run delay UI/settings from seconds to minutes while preserving
+# internal second-based waiting and automatic migration from legacy settings.
+
+APP_VERSION = "1.5.6 Minute Delay"
+
+_legacy_default_delay_seconds = DEFAULT_SETTINGS.pop("delay_seconds", 0)
+DEFAULT_SETTINGS["delay_minutes"] = float(_legacy_default_delay_seconds or 0) / 60.0
+
+_v156_prev_sanitize = sanitize_settings
+def sanitize_settings(raw):
+    raw_dict = dict(raw) if isinstance(raw, dict) else {}
+    legacy_seconds = raw_dict.get("delay_seconds")
+    data = _v156_prev_sanitize(raw_dict)
+    if "delay_minutes" in raw_dict:
+        minutes = _safe_float(raw_dict.get("delay_minutes"), 0.0, 0.0, 1440.0)
+    elif legacy_seconds is not None:
+        minutes = _safe_float(legacy_seconds, 0.0, 0.0, 86400.0) / 60.0
+    else:
+        minutes = _safe_float(data.get("delay_minutes", 0.0), 0.0, 0.0, 1440.0)
+    data["delay_minutes"] = minutes
+    data.pop("delay_seconds", None)
+    return data
+
+
+def _v156_descendants(widget):
+    items = []
+    stack = list(widget.winfo_children())
+    while stack:
+        item = stack.pop()
+        items.append(item)
+        try:
+            stack.extend(item.winfo_children())
+        except Exception:
+            pass
+    return items
+
+
+def _v156_prepare_delay_var(self):
+    current = getattr(self, "delay_var", None)
+    if getattr(self, "_v156_delay_var_ready", False):
+        return
+    old_name = str(current) if current is not None else ""
+    minutes = _safe_float(self.settings.get("delay_minutes", 0.0), 0.0, 0.0, 1440.0)
+    self.delay_var = tk.DoubleVar(value=minutes)
+    self._v156_delay_var_ready = True
+    # Rebind any Dashboard spinbox that was created during the original __init__.
+    for widget in _v156_descendants(self):
+        try:
+            if widget.winfo_class() in {"TSpinbox", "Spinbox"} and str(widget.cget("textvariable")) == old_name:
+                widget.configure(textvariable=self.delay_var, from_=0, to=1440, increment=0.5)
+                widget.bind("<FocusOut>", lambda _e: self.save_vars(), add="+")
+                widget.bind("<Return>", lambda _e: self.save_vars(), add="+")
+        except Exception:
+            pass
+
+
+def _v156_patch_delay_widgets(self):
+    _v156_prepare_delay_var(self)
+    delay_name = str(self.delay_var)
+    for widget in _v156_descendants(self):
+        try:
+            text = str(widget.cget("text"))
+            if text in {"Delay between runs (s)", "Delay between runs (sec)", "Delay between runs (seconds)"}:
+                widget.configure(text="Delay between runs (min)")
+        except Exception:
+            pass
+        try:
+            if widget.winfo_class() in {"TSpinbox", "Spinbox"} and str(widget.cget("textvariable")) == delay_name:
+                widget.configure(from_=0, to=1440, increment=0.5)
+                widget.bind("<FocusOut>", lambda _e: self.save_vars(), add="+")
+                widget.bind("<Return>", lambda _e: self.save_vars(), add="+")
+        except Exception:
+            pass
+
+
+_v156_prev_show_dashboard = MouseRecorderApp.show_dashboard
+def _v156_show_dashboard(self):
+    _v156_prev_show_dashboard(self)
+    _v156_patch_delay_widgets(self)
+
+
+_v156_prev_save_vars = MouseRecorderApp.save_vars
+def _v156_save_vars(self):
+    _v156_prepare_delay_var(self)
+    requested_minutes = _safe_float(self.delay_var.get(), 0.0, 0.0, 1440.0)
+    _v156_prev_save_vars(self)
+    self.settings["delay_minutes"] = requested_minutes
+    self.settings.pop("delay_seconds", None)
+    self.settings = sanitize_settings(self.settings)
+    save_settings(self.settings)
+    self.engine.configure(self.settings)
+
+
+# Existing playback code expects seconds. Supply a temporary compatibility value
+# while it runs, but keep persisted/user-facing settings in minutes.
+_v156_prev_playback = RecorderEngine.playback
+def _v156_playback(self, update_callback=None):
+    minutes = _safe_float(self.settings.get("delay_minutes", 0.0), 0.0, 0.0, 1440.0)
+    had_seconds = "delay_seconds" in self.settings
+    old_seconds = self.settings.get("delay_seconds")
+    original_status = self.status_callback
+    def minute_status(message):
+        text = str(message)
+        match = re.match(r"^Waiting\s+([0-9.]+)s\s+before next run$", text)
+        if match:
+            try:
+                text = f"Waiting {float(match.group(1)) / 60.0:g} min before next run"
+            except Exception:
+                pass
+        return original_status(text)
+    self.settings["delay_seconds"] = minutes * 60.0
+    self.status_callback = minute_status
+    try:
+        return _v156_prev_playback(self, update_callback=update_callback)
+    finally:
+        self.status_callback = original_status
+        if had_seconds:
+            self.settings["delay_seconds"] = old_seconds
+        else:
+            self.settings.pop("delay_seconds", None)
+
+
+# Keep playback confirmation consistent with the minute-based Dashboard.
+def _v156_confirm_playback(self):
+    if self.engine.state != STATE_IDLE:
+        return
+    if self.engine.get_action_counts().get("total", 0) <= 0:
+        messagebox.showwarning("No Recording", "Load or record something first.")
+        return
+    self.save_vars()
+    checks = self.engine.preflight()
+    failures = [c for c in checks if not c[1]]
+    if failures:
+        details = "\n".join(f"- {name}: {detail}" for name, _, detail in failures)
+        if not messagebox.askyesno("Pre-flight Warnings", f"Some checks need attention:\n\n{details}\n\nContinue anyway?"):
+            return
+    counts = self.counts()
+    msg = (
+        f"Mode: {self.mode_var.get()}\n"
+        f"Actions: {counts['total']} (click={counts['click']}, scroll={counts['scroll']}, move={counts['move']}, key={counts['key']})\n"
+        f"Repeat: {self.repeat_var.get()}\n"
+        f"Delay: {self.delay_var.get():g} min\n"
+        f"Speed: {self.speed_var.get():.1f}x\n"
+        f"Target validation: {'ON' if self.target_validation_var.get() else 'OFF'}\n"
+        f"Window switching: {'IGNORED / keep playing' if self.allow_window_switch_var.get() else 'PROTECTED'}\n"
+        f"Safety throttle: {self.playback_throttle_var.get()} ms\n\nStart playback?"
+    )
+    if messagebox.askyesno("Confirm Playback", msg):
+        self.start_playback()
+
+
+# Standalone EXE exports use minutes too.
+_v156_prev_runner_source = MouseRecorderApp._standalone_runner_source
+def _v156_standalone_runner_source(self, actions, recording_name="Rice2k Macro"):
+    source = _v156_prev_runner_source(self, actions, recording_name)
+    source = source.replace("Delay between runs (s)", "Delay between runs (min)")
+    source = source.replace("Delay between runs (sec)", "Delay between runs (min)")
+    source = source.replace(
+        "between = max(0.0, float(delay_var.get()))",
+        "between = max(0.0, float(delay_var.get()) * 60.0)",
+    )
+    source = source.replace(
+        "from_=0, to=99999, increment=1, textvariable=delay_var",
+        "from_=0, to=1440, increment=0.5, textvariable=delay_var",
+    )
+    source = source.replace(
+        "set_status(f\"Waiting {between:g}s\")",
+        "set_status(f\"Waiting {between / 60.0:g} min\")",
+    )
+    return source
+
+
+MouseRecorderApp.show_dashboard = _v156_show_dashboard
+MouseRecorderApp.save_vars = _v156_save_vars
+MouseRecorderApp.confirm_playback = _v156_confirm_playback
+MouseRecorderApp._standalone_runner_source = _v156_standalone_runner_source
+RecorderEngine.playback = _v156_playback
