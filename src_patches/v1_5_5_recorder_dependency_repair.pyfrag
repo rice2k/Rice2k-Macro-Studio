@@ -1,0 +1,65 @@
+# Rice2k Macro Studio v1.5.5 - Recorder Dependency Repair
+# Repairs the case where top-level pynput imports but mouse/keyboard backends fail.
+
+APP_VERSION = "1.5.5 Recorder Dependency Repair"
+
+PYNPUT_MOUSE_IMPORT_ERROR = ""
+PYNPUT_KEYBOARD_IMPORT_ERROR = ""
+if sys.platform == "win32":
+    os.environ["PYNPUT_BACKEND_MOUSE"] = "win32"
+    os.environ["PYNPUT_BACKEND_KEYBOARD"] = "win32"
+
+try:
+    from pynput import mouse as _v155_mouse
+    mouse = _v155_mouse
+except Exception as exc:
+    mouse = None
+    PYNPUT_MOUSE_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
+
+try:
+    from pynput import keyboard as _v155_keyboard
+    keyboard = _v155_keyboard
+except Exception as exc:
+    keyboard = None
+    PYNPUT_KEYBOARD_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
+
+
+def recorder_dependency_status():
+    return {
+        "mouse_ok": mouse is not None,
+        "keyboard_ok": keyboard is not None,
+        "mouse_error": PYNPUT_MOUSE_IMPORT_ERROR,
+        "keyboard_error": PYNPUT_KEYBOARD_IMPORT_ERROR,
+        "backend_mouse": os.environ.get("PYNPUT_BACKEND_MOUSE", "auto"),
+        "backend_keyboard": os.environ.get("PYNPUT_BACKEND_KEYBOARD", "auto"),
+        "python": sys.executable,
+        "python_version": sys.version.split()[0],
+    }
+
+
+def recorder_dependency_message(kind="mouse"):
+    status = recorder_dependency_status()
+    error = status["mouse_error"] if kind == "mouse" else status["keyboard_error"]
+    label = "Mouse/scroll" if kind == "mouse" else "Keyboard"
+    detail = error or "pynput backend did not initialize."
+    return (
+        f"{label} recording backend is unavailable.\n\n"
+        f"Actual import error: {detail}\n\n"
+        "Run Repair_Recorder_Dependency.bat from the Rice2k Macro Studio folder, "
+        "then reopen the app. Details are also written to error_log.txt."
+    )
+
+
+_v155_prev_engine_start = RecorderEngine.start_recording
+def _v155_engine_start(self):
+    want_mouse_listener = bool(self.settings.get("record_mouse")) or bool(self.settings.get("record_scroll", True)) or bool(self.settings.get("record_mouse_moves"))
+    want_keyboard = bool(self.settings.get("record_keyboard"))
+    if want_mouse_listener and mouse is None:
+        log_error("recorder_dependency_mouse", extra=json.dumps(recorder_dependency_status(), indent=2))
+        raise RuntimeError(recorder_dependency_message("mouse"))
+    if want_keyboard and keyboard is None:
+        log_error("recorder_dependency_keyboard", extra=json.dumps(recorder_dependency_status(), indent=2))
+        raise RuntimeError(recorder_dependency_message("keyboard"))
+    return _v155_prev_engine_start(self)
+
+RecorderEngine.start_recording = _v155_engine_start
