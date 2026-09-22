@@ -1,0 +1,216 @@
+# Rice2k Macro Studio v1.5.4 - Performance Hardening (GitHub patch)
+APP_VERSION = "1.5.4 Performance Hardening"
+
+# Cache expensive foreground-window/process lookups globally. Nested recording callbacks
+# resolve this global at runtime, so this protects keyboard/scroll/click metadata collection
+# without replacing the entire recorder callback implementation.
+_v154_real_active_window_info = active_window_info
+_v154_window_cache = {"when": 0.0, "value": None}
+def active_window_info():
+    now = time.perf_counter()
+    cached = _v154_window_cache.get("value")
+    if cached is not None and now - _v154_window_cache.get("when", 0.0) < 0.10:
+        return dict(cached)
+    value = _v154_real_active_window_info()
+    _v154_window_cache["when"] = now
+    _v154_window_cache["value"] = dict(value)
+    return value
+
+# Cache DPI lookups briefly as well.
+_v154_real_dpi_for_window = dpi_for_window
+_v154_dpi_cache = {}
+def dpi_for_window(hwnd):
+    now = time.perf_counter()
+    key = int(hwnd or 0)
+    item = _v154_dpi_cache.get(key)
+    if item and now - item[0] < 0.75:
+        return item[1]
+    value = _v154_real_dpi_for_window(key)
+    _v154_dpi_cache[key] = (now, value)
+    if len(_v154_dpi_cache) > 32:
+        cutoff = now - 5.0
+        for k, v in list(_v154_dpi_cache.items()):
+            if v[0] < cutoff:
+                _v154_dpi_cache.pop(k, None)
+    return value
+
+# Bound Smart Target/UI Automation lookup. A hung target must not stall a recorder
+# callback indefinitely; later clicks simply fall back to coordinates while busy.
+_v154_real_uia_element_at_point = uia_element_at_point
+_v154_uia_guard = threading.Lock()
+_v154_uia_busy = False
+def uia_element_at_point(x, y):
+    global _v154_uia_busy
+    blank = {"control_name":"", "control_type":"", "automation_id":"", "control_class":"", "framework_id":"", "uia_supported":False}
+    if Desktop is None or not sys.platform.startswith("win"):
+        return blank
+    with _v154_uia_guard:
+        if _v154_uia_busy:
+            return blank
+        _v154_uia_busy = True
+    holder = {}
+    done = threading.Event()
+    def worker():
+        global _v154_uia_busy
+        try:
+            holder["result"] = _v154_real_uia_element_at_point(x, y)
+        finally:
+            with _v154_uia_guard:
+                _v154_uia_busy = False
+            done.set()
+    threading.Thread(target=worker, name="Rice2kUIALookup", daemon=True).start()
+    if done.wait(0.12):
+        return holder.get("result", blank)
+    return blank
+
+_v154_prev_engine_init = RecorderEngine.__init__
+def _v154_engine_init(self, *args, **kwargs):
+    _v154_prev_engine_init(self, *args, **kwargs)
+    raw_log = self.log_callback
+    def filtered_log(text):
+        if (str(text).startswith("KEY DOWN") or str(text).startswith("SCROLL")) and not self.settings.get("debug_logging", False):
+            return
+        raw_log(text)
+    self.log_callback = filtered_log
+RecorderEngine.__init__ = _v154_engine_init
+
+# Snapshot helpers used by paged/large-recording tools.
+def _v154_snapshot_actions(self, limit=None):
+    with self.action_lock:
+        source = self.actions if limit is None else self.actions[:max(0, int(limit))]
+        return [dict(a) for a in source]
+def _v154_snapshot_actions_slice(self, start=0, count=2000):
+    start=max(0,int(start)); count=max(1,int(count))
+    with self.action_lock:
+        return [(i,dict(a)) for i,a in enumerate(self.actions[start:start+count],start)]
+def _v154_recount_actions(self):
+    with self.action_lock:
+        counts={"total":len(self.actions),"click":0,"scroll":0,"move":0,"key":0}
+        for a in self.actions:
+            t=a.get("type")
+            if t in counts: counts[t]+=1
+        self.action_counts=counts
+        return dict(counts)
+RecorderEngine.snapshot_actions = _v154_snapshot_actions
+RecorderEngine.snapshot_actions_slice = _v154_snapshot_actions_slice
+RecorderEngine.recount_actions = _v154_recount_actions
+
+# Stream recovery data instead of reading the complete journal string at once.
+def _v154_load_recovery_journal(self):
+    if not RECOVERY_JOURNAL.exists():
+        return 0
+    recovered=[]
+    with RECOVERY_JOURNAL.open("r",encoding="utf-8") as f:
+        for line in f:
+            try: recovered.append(json.loads(line))
+            except Exception: continue
+    with self.action_lock:
+        self.actions=recovered
+    self.recount_actions()
+    return len(recovered)
+RecorderEngine.load_recovery_journal = _v154_load_recovery_journal
+
+# Stop listeners quickly, then serialize the recording away from Tk's UI thread.
+def _v154_stop_recording_capture(self):
+    if self.state not in {STATE_RECORDING,STATE_RECORDING_PAUSED}:
+        return None
+    self.state=STATE_IDLE
+    for name in ["mouse_listener","keyboard_listener"]:
+        listener=getattr(self,name)
+        if listener:
+            try: listener.stop()
+            except Exception: pass
+            setattr(self,name,None)
+    self.journal_stop.set()
+    return self.snapshot_actions()
+def _v154_save_recording_snapshot(self,actions):
+    self._stop_journal_writer()
+    smart=build_smart_actions(actions)
+    file_path=RECORDINGS_DIR/f"recording_{now_stamp()}.json"
+    payload={"app":APP_NAME,"version":APP_VERSION,"created":datetime.datetime.now().isoformat(),"action_count":len(actions),"smart_action_count":len(smart),"actions":actions,"smart_actions":smart}
+    tmp=file_path.with_suffix(file_path.suffix+".tmp")
+    with tmp.open("w",encoding="utf-8") as f:
+        json.dump(payload,f,ensure_ascii=False,separators=(",",":"))
+    tmp.replace(file_path)
+    self.current_file=str(file_path)
+    try: RECOVERY_JOURNAL.unlink(missing_ok=True)
+    except Exception: pass
+    return file_path
+RecorderEngine.stop_recording_capture = _v154_stop_recording_capture
+RecorderEngine.save_recording_snapshot = _v154_save_recording_snapshot
+
+_v154_prev_app_init = MouseRecorderApp.__init__
+def _v154_app_init(self,*args,**kwargs):
+    _v154_prev_app_init(self,*args,**kwargs)
+    self.record_save_in_progress=False
+    self.record_save_thread=None
+    self.record_save_result_queue=queue.Queue(maxsize=1)
+    self.record_save_poll_job=None
+MouseRecorderApp.__init__ = _v154_app_init
+
+_v154_prev_start_recording = MouseRecorderApp.start_recording
+def _v154_start_recording(self):
+    if getattr(self,"record_save_in_progress",False):
+        messagebox.showinfo("Saving Recording","Please wait for the previous recording to finish saving.")
+        return
+    return _v154_prev_start_recording(self)
+MouseRecorderApp.start_recording = _v154_start_recording
+
+def _v154_stop_recording(self):
+    if getattr(self,"record_save_in_progress",False): return
+    try:
+        actions=self.engine.stop_recording_capture()
+        if actions is None: return
+        self.record_save_in_progress=True
+        self.hide_floating(); self.deiconify(); self.lift()
+        if self.timer_job:
+            try: self.after_cancel(self.timer_job)
+            except Exception: pass
+            self.timer_job=None
+        self.status_var.set("Saving recording…")
+        while True:
+            try: self.record_save_result_queue.get_nowait()
+            except queue.Empty: break
+        def worker():
+            path=None; error=None
+            try: path=self.engine.save_recording_snapshot(actions)
+            except Exception as exc:
+                error=exc; log_error("async_recording_save",exc)
+            try: self.record_save_result_queue.put_nowait((path,error))
+            except queue.Full: pass
+        self.record_save_thread=threading.Thread(target=worker,name="Rice2kRecordingSaver",daemon=False)
+        self.record_save_thread.start()
+        self.record_save_poll_job=self.after(50,self._poll_recording_save)
+    except Exception as exc:
+        self.record_save_in_progress=False
+        log_error("stop_recording",exc)
+        self.hide_floating(); self.deiconify()
+        messagebox.showerror("Stop Error",f"{exc}\n\nDetails saved to error_log.txt")
+def _v154_poll_recording_save(self):
+    self.record_save_poll_job=None
+    try: path,error=self.record_save_result_queue.get_nowait()
+    except queue.Empty:
+        if self.record_save_in_progress: self.record_save_poll_job=self.after(50,self._poll_recording_save)
+        return
+    self._finish_recording_save(path,error)
+def _v154_finish_recording_save(self,path,error):
+    self.record_save_in_progress=False; self.record_save_thread=None
+    if error or not path:
+        self.status_var.set("Ready")
+        messagebox.showerror("Save Error",f"{error or 'Recording could not be saved.'}\n\nRecovery journal was kept for recovery.")
+        return
+    self.settings["last_recording"]=str(path); self.loaded_file_var.set(str(path)); self.action_count_var.set(self.counts_text()); save_settings(self.settings); self.status_var.set("Ready")
+    if self.run_behavior_var.get()=="after_save": self.after(300,self.confirm_playback)
+    else: messagebox.showinfo("Saved",f"Recording saved:\n{path}\n\n{self.counts_text()}")
+MouseRecorderApp.stop_recording = _v154_stop_recording
+MouseRecorderApp._poll_recording_save = _v154_poll_recording_save
+MouseRecorderApp._finish_recording_save = _v154_finish_recording_save
+
+_v154_prev_on_close = MouseRecorderApp.on_close
+def _v154_on_close(self):
+    job=getattr(self,"record_save_poll_job",None)
+    if job:
+        try: self.after_cancel(job)
+        except Exception: pass
+    return _v154_prev_on_close(self)
+MouseRecorderApp.on_close = _v154_on_close
