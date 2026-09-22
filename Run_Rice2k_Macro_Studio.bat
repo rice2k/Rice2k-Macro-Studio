@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title Rice2k Macro Studio v1.5.4 - Reliable Launcher
+title Rice2k Macro Studio v1.5.6 - Reliable Launcher
 cd /d "%~dp0"
 
 set "LOGDIR=%USERPROFILE%\Documents\Rice2k Macro Studio\Errors"
@@ -14,19 +14,19 @@ set "ERRORLOG=%LOGDIR%\error_log.txt"
 set "HANGLOG=%LOGDIR%\hang_watchdog.log"
 
 >>"%LOG%" echo ================================================================================
->>"%LOG%" echo [%DATE% %TIME%] Rice2k Macro Studio v1.5.4 launcher starting
+>>"%LOG%" echo [%DATE% %TIME%] Rice2k Macro Studio v1.5.6 launcher starting
 >>"%LOG%" echo Folder: %CD%
 
 echo.
 echo ================================================================
-echo   Rice2k Macro Studio v1.5.4
-echo   Performance Hardening
+echo   Rice2k Macro Studio v1.5.6
+echo   Minute Delay
 echo ================================================================
 echo.
 
 if not exist "rice2k_macro_studio.py" goto :missing_files
 if not exist "src_fragments\part_01.pyfrag" goto :missing_files
-if not exist "src_patches\v1_5_4_performance_hardening.pyfrag" goto :missing_files
+if not exist "src_patches\v1_5_6_minute_delay.pyfrag" goto :missing_files
 if not exist "requirements.txt" goto :missing_files
 
 set "PY_EXE="
@@ -60,7 +60,7 @@ echo [3/6] Compiling source loader...
 if errorlevel 1 goto :compile_error
 
 echo [4/6] Validating reconstructed source...
-"%PY_EXE%" -c "from pathlib import Path; parts=sorted(Path('src_fragments').glob('part_*.pyfrag')); patches=sorted(Path('src_patches').glob('*.pyfrag')); assert len(parts)==14, f'Expected 14 source fragments, found {len(parts)}'; assert len(patches)>=15, f'Expected at least 15 version patches, found {len(patches)}'; s=''.join(x.read_text(encoding='utf-8') for x in parts); marker='\nif __name__ == \"__main__\":\n    main()'; assert marker in s, 'main marker missing'; s=s.replace(marker,'\n\n'+'\n\n'.join(x.read_text(encoding='utf-8') for x in patches)+'\n\n'+marker,1); compile(s,'rice2k_macro_studio_full.py','exec'); print('Full patched source OK')" >>"%LOG%" 2>&1
+"%PY_EXE%" -c "from pathlib import Path; parts=sorted(Path('src_fragments').glob('part_*.pyfrag')); patches=sorted(Path('src_patches').glob('*.pyfrag')); assert len(parts)==14, f'Expected 14 source fragments, found {len(parts)}'; assert len(patches)>=16, f'Expected at least 16 version patches, found {len(patches)}'; s=''.join(x.read_text(encoding='utf-8') for x in parts); marker='\nif __name__ == \"__main__\":\n    main()'; assert marker in s, 'main marker missing'; s=s.replace(marker,'\n\n'+'\n\n'.join(x.read_text(encoding='utf-8') for x in patches)+'\n\n'+marker,1); compile(s,'rice2k_macro_studio_full.py','exec'); print('Full patched source OK')" >>"%LOG%" 2>&1
 if errorlevel 1 goto :rebuild_error
 
 echo [5/6] Running GUI startup self-test...
