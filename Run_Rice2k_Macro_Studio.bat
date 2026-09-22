@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title Rice2k Macro Studio v1.5.3 - Reliable Launcher
+title Rice2k Macro Studio v1.5.4 - Reliable Launcher
 cd /d "%~dp0"
 
 set "LOGDIR=%USERPROFILE%\Documents\Rice2k Macro Studio\Errors"
@@ -11,26 +11,22 @@ if not exist "%LOGDIR%" (
 )
 set "LOG=%LOGDIR%\launcher_log.txt"
 set "ERRORLOG=%LOGDIR%\error_log.txt"
-set "STARTUPLOG=%LOGDIR%\startup_log.txt"
 set "HANGLOG=%LOGDIR%\hang_watchdog.log"
 
 >>"%LOG%" echo ================================================================================
->>"%LOG%" echo [%DATE% %TIME%] Rice2k Macro Studio v1.5.3 launcher starting
+>>"%LOG%" echo [%DATE% %TIME%] Rice2k Macro Studio v1.5.4 launcher starting
 >>"%LOG%" echo Folder: %CD%
 
 echo.
 echo ================================================================
-echo   Rice2k Macro Studio v1.5.3
-echo   Recording Freeze Fix
+echo   Rice2k Macro Studio v1.5.4
+echo   Performance Hardening
 echo ================================================================
 echo.
 
 if not exist "rice2k_macro_studio.py" goto :missing_files
 if not exist "src_fragments\part_01.pyfrag" goto :missing_files
-if not exist "src_patches\v1_5_standalone_exe_export.pyfrag" goto :missing_files
-if not exist "src_patches\v1_5_1_playback_stability_fix.pyfrag" goto :missing_files
-if not exist "src_patches\v1_5_2_launcher_reliability.pyfrag" goto :missing_files
-if not exist "src_patches\v1_5_3_recording_freeze_fix.pyfrag" goto :missing_files
+if not exist "src_patches\v1_5_4_performance_hardening.pyfrag" goto :missing_files
 if not exist "requirements.txt" goto :missing_files
 
 set "PY_EXE="
@@ -63,8 +59,8 @@ echo [3/6] Compiling source loader...
 "%PY_EXE%" -m py_compile "rice2k_macro_studio.py" >>"%LOG%" 2>&1
 if errorlevel 1 goto :compile_error
 
-echo [4/6] Validating reconstructed application source...
-"%PY_EXE%" -c "from pathlib import Path; parts=sorted(Path('src_fragments').glob('part_*.pyfrag')); patches=sorted(Path('src_patches').glob('*.pyfrag')); assert len(parts)==14, f'Expected 14 source fragments, found {len(parts)}'; assert len(patches)>=14, f'Expected at least 14 version patches, found {len(patches)}'; s=''.join(x.read_text(encoding='utf-8') for x in parts); marker='\nif __name__ == \"__main__\":\n    main()'; assert marker in s, 'main marker missing'; s=s.replace(marker,'\n\n'+'\n\n'.join(x.read_text(encoding='utf-8') for x in patches)+'\n\n'+marker,1); compile(s,'rice2k_macro_studio_full.py','exec'); print('Full patched application source OK')" >>"%LOG%" 2>&1
+echo [4/6] Validating reconstructed source...
+"%PY_EXE%" -c "from pathlib import Path; parts=sorted(Path('src_fragments').glob('part_*.pyfrag')); patches=sorted(Path('src_patches').glob('*.pyfrag')); assert len(parts)==14, f'Expected 14 source fragments, found {len(parts)}'; assert len(patches)>=15, f'Expected at least 15 version patches, found {len(patches)}'; s=''.join(x.read_text(encoding='utf-8') for x in parts); marker='\nif __name__ == \"__main__\":\n    main()'; assert marker in s, 'main marker missing'; s=s.replace(marker,'\n\n'+'\n\n'.join(x.read_text(encoding='utf-8') for x in patches)+'\n\n'+marker,1); compile(s,'rice2k_macro_studio_full.py','exec'); print('Full patched source OK')" >>"%LOG%" 2>&1
 if errorlevel 1 goto :rebuild_error
 
 echo [5/6] Running GUI startup self-test...
@@ -81,11 +77,11 @@ set "APP_EXIT=%ERRORLEVEL%"
 echo.
 echo Rice2k Macro Studio closed with exit code %APP_EXIT%.
 echo Launcher log : %LOG%
-echo App error log: %ERRORLOG%
+echo Error log    : %ERRORLOG%
 echo Hang log     : %HANGLOG%
-echo Startup log  : %STARTUPLOG%
 echo.
-pause
+echo Press any key to close this window.
+pause >nul
 exit /b %APP_EXIT%
 
 :missing_files
@@ -119,11 +115,11 @@ goto :show_failure
 :show_failure
 echo.
 echo Launcher log : %LOG%
-echo App error log: %ERRORLOG%
+echo Error log    : %ERRORLOG%
 echo Hang log     : %HANGLOG%
-echo Startup log  : %STARTUPLOG%
 echo.
 if exist "%LOG%" powershell -NoProfile -Command "Get-Content -LiteralPath '%LOG%' -Tail 40" 2>nul
 echo.
-pause
+echo Press any key to close this window.
+pause >nul
 exit /b 1
