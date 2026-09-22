@@ -1,0 +1,266 @@
+# Rice2k Macro Studio v1.5.3 - Recording Freeze Fix
+from collections import deque
+
+APP_VERSION = "1.5.3 Recording Freeze Fix"
+
+_v153_prev_engine_init = RecorderEngine.__init__
+def _v153_engine_init(self, *args, **kwargs):
+    _v153_prev_engine_init(self, *args, **kwargs)
+    self.action_counts = {"total": 0, "click": 0, "scroll": 0, "move": 0, "key": 0}
+    self.journal_queue = queue.Queue(maxsize=10000)
+    self.journal_stop = threading.Event()
+    self.journal_thread = None
+    self.journal_dropped = 0
+
+
+def _v153_journal_writer_loop(self):
+    try:
+        RECOVERY_DIR.mkdir(parents=True, exist_ok=True)
+        with RECOVERY_JOURNAL.open("a", encoding="utf-8") as f:
+            while not self.journal_stop.is_set() or not self.journal_queue.empty():
+                batch = []
+                try:
+                    batch.append(self.journal_queue.get(timeout=0.25))
+                except queue.Empty:
+                    continue
+                for _ in range(199):
+                    try:
+                        batch.append(self.journal_queue.get_nowait())
+                    except queue.Empty:
+                        break
+                f.write("".join(json.dumps(a, ensure_ascii=False) + "\n" for a in batch))
+                f.flush()
+    except Exception as exc:
+        log_error("recovery_journal_writer", exc)
+
+
+def _v153_start_journal_writer(self):
+    self.journal_stop.clear()
+    self.journal_queue = queue.Queue(maxsize=10000)
+    self.journal_dropped = 0
+    self.journal_thread = threading.Thread(target=self._journal_writer_loop, name="Rice2kRecoveryWriter", daemon=True)
+    self.journal_thread.start()
+
+
+def _v153_stop_journal_writer(self):
+    self.journal_stop.set()
+    thread = self.journal_thread
+    if thread and thread.is_alive():
+        thread.join(timeout=2.0)
+    self.journal_thread = None
+
+
+def _v153_append(self, action):
+    action_type = action.get("type", "")
+    with self.action_lock:
+        self.actions.append(action)
+        self.action_counts["total"] = self.action_counts.get("total", 0) + 1
+        if action_type in self.action_counts:
+            self.action_counts[action_type] = self.action_counts.get(action_type, 0) + 1
+    self.last_event_time = time.time()
+    try:
+        self.journal_queue.put_nowait(action)
+    except queue.Full:
+        self.journal_dropped += 1
+        if self.journal_dropped == 1:
+            self.log_callback("Recovery journal queue is busy; newest actions continue recording in memory.")
+
+
+def _v153_get_action_counts(self):
+    with self.action_lock:
+        return dict(self.action_counts)
+
+
+_v153_prev_start_recording_engine = RecorderEngine.start_recording
+def _v153_start_recording_engine(self):
+    with self.action_lock:
+        self.action_counts = {"total": 0, "click": 0, "scroll": 0, "move": 0, "key": 0}
+    try:
+        RECOVERY_JOURNAL.write_text("", encoding="utf-8")
+    except Exception:
+        pass
+    self._start_journal_writer()
+    try:
+        return _v153_prev_start_recording_engine(self)
+    except Exception:
+        self._stop_journal_writer()
+        raise
+
+
+_v153_prev_stop_recording_engine = RecorderEngine.stop_recording
+def _v153_stop_recording_engine(self):
+    self._stop_journal_writer()
+    return _v153_prev_stop_recording_engine(self)
+
+
+_v153_prev_load_recording = RecorderEngine.load_recording
+def _v153_load_recording(self, path):
+    data = _v153_prev_load_recording(self, path)
+    actions = self.snapshot_actions()
+    with self.action_lock:
+        self.action_counts = {
+            "total": len(actions),
+            "click": sum(1 for a in actions if a.get("type") == "click"),
+            "scroll": sum(1 for a in actions if a.get("type") == "scroll"),
+            "move": sum(1 for a in actions if a.get("type") == "move"),
+            "key": sum(1 for a in actions if a.get("type") == "key"),
+        }
+    return data
+
+
+_v153_prev_recover = RecorderEngine.load_recovery_journal
+def _v153_recover(self):
+    count = _v153_prev_recover(self)
+    actions = self.snapshot_actions()
+    with self.action_lock:
+        self.action_counts = {
+            "total": len(actions),
+            "click": sum(1 for a in actions if a.get("type") == "click"),
+            "scroll": sum(1 for a in actions if a.get("type") == "scroll"),
+            "move": sum(1 for a in actions if a.get("type") == "move"),
+            "key": sum(1 for a in actions if a.get("type") == "key"),
+        }
+    return count
+
+
+RecorderEngine.__init__ = _v153_engine_init
+RecorderEngine._journal_writer_loop = _v153_journal_writer_loop
+RecorderEngine._start_journal_writer = _v153_start_journal_writer
+RecorderEngine._stop_journal_writer = _v153_stop_journal_writer
+RecorderEngine._append = _v153_append
+RecorderEngine.get_action_counts = _v153_get_action_counts
+RecorderEngine.start_recording = _v153_start_recording_engine
+RecorderEngine.stop_recording = _v153_stop_recording_engine
+RecorderEngine.load_recording = _v153_load_recording
+RecorderEngine.load_recovery_journal = _v153_recover
+
+
+_v153_prev_app_init = MouseRecorderApp.__init__
+def _v153_app_init(self, *args, **kwargs):
+    _v153_prev_app_init(self, *args, **kwargs)
+    self.log_lines = deque(maxlen=5000)
+    self.log_queue = queue.Queue(maxsize=2000)
+    self.log_dropped = 0
+    self.record_start_perf = None
+    self.heartbeat_job = None
+    self._ui_heartbeat = time.monotonic()
+    self._watchdog_stop = threading.Event()
+    self._watchdog_thread = threading.Thread(target=self._watchdog_loop, name="Rice2kUIWatchdog", daemon=True)
+    self.heartbeat_job = self.after(1000, self._heartbeat_tick)
+    self._watchdog_thread.start()
+
+
+_v153_prev_start_recording_app = MouseRecorderApp.start_recording
+def _v153_start_recording_app(self):
+    self.record_start_perf = time.perf_counter()
+    return _v153_prev_start_recording_app(self)
+
+
+def _v153_timer_tick(self):
+    if self.engine.state not in {STATE_RECORDING, STATE_RECORDING_PAUSED}:
+        self.timer_job = None
+        return
+    try:
+        started = self.record_start_perf if self.record_start_perf is not None else time.perf_counter()
+        elapsed = int(max(0.0, time.perf_counter() - started))
+        m, s = divmod(elapsed, 60)
+        self.elapsed_var.set(f"{m:02d}:{s:02d}")
+        c = self.engine.get_action_counts()
+        self.action_count_var.set(f"Actions {c['total']} | Click {c['click']} | Scroll {c['scroll']} | Move {c['move']} | Key {c['key']}")
+        if self.floating_label is not None:
+            try:
+                if self.floating_label.winfo_exists():
+                    label = "Paused" if self.engine.state == STATE_RECORDING_PAUSED else "Recording"
+                    self.floating_label.config(text=f"{label} {m:02d}:{s:02d} | Click {c['click']} | Scroll {c['scroll']} | Keys {c['key']}")
+            except tk.TclError:
+                self.floating_label = None
+    except Exception as exc:
+        log_error("recording_timer_tick", exc)
+    finally:
+        if self.engine.state in {STATE_RECORDING, STATE_RECORDING_PAUSED}:
+            self.timer_job = self.after(500, self._timer_tick)
+        else:
+            self.timer_job = None
+
+
+def _v153_counts(self):
+    return self.engine.get_action_counts()
+
+
+def _v153_add_log(self, text):
+    line = f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {text}"
+    self.log_lines.append(line)
+    try:
+        self.log_queue.put_nowait(line)
+    except queue.Full:
+        self.log_dropped += 1
+
+
+def _v153_drain_log_queue(self):
+    drained = 0
+    try:
+        while drained < 250:
+            self.log_queue.get_nowait()
+            drained += 1
+    except queue.Empty:
+        pass
+    try:
+        if hasattr(self, "speed_label") and self.speed_label.winfo_exists():
+            self.speed_label.config(text=f"{self.speed_var.get():.1f}x")
+    except (tk.TclError, AttributeError):
+        pass
+    self.log_drain_job = self.after(20 if not self.log_queue.empty() else 150, self._drain_log_queue)
+
+
+def _v153_heartbeat_tick(self):
+    self._ui_heartbeat = time.monotonic()
+    if not self._watchdog_stop.is_set():
+        self.heartbeat_job = self.after(1000, self._heartbeat_tick)
+
+
+def _v153_watchdog_loop(self):
+    log_path = ERRORS_DIR / "hang_watchdog.log"
+    last_report = 0.0
+    while not self._watchdog_stop.wait(2.0):
+        age = time.monotonic() - self._ui_heartbeat
+        if age < 5.0:
+            continue
+        now = time.monotonic()
+        if now - last_report < 15.0:
+            continue
+        last_report = now
+        try:
+            frames = sys._current_frames()
+            lines = ["=" * 80, f"Time: {datetime.datetime.now().isoformat()}", f"UI heartbeat stale for {age:.1f} seconds", f"Engine state: {self.engine.state}", f"Action counts: {self.engine.get_action_counts()}"]
+            for tid, frame in frames.items():
+                lines.append(f"\n--- Thread {tid} ---")
+                lines.extend(traceback.format_stack(frame))
+            _safe_append_log(log_path, FALLBACK_LOG_DIR / "hang_watchdog.log", "\n".join(lines) + "\n")
+        except Exception:
+            pass
+
+
+_v153_prev_on_close = MouseRecorderApp.on_close
+def _v153_on_close(self):
+    try:
+        self._watchdog_stop.set()
+        self.engine._stop_journal_writer()
+        job = getattr(self, "heartbeat_job", None)
+        if job:
+            try:
+                self.after_cancel(job)
+            except Exception:
+                pass
+    finally:
+        return _v153_prev_on_close(self)
+
+
+MouseRecorderApp.__init__ = _v153_app_init
+MouseRecorderApp.start_recording = _v153_start_recording_app
+MouseRecorderApp._timer_tick = _v153_timer_tick
+MouseRecorderApp.counts = _v153_counts
+MouseRecorderApp.add_log = _v153_add_log
+MouseRecorderApp._drain_log_queue = _v153_drain_log_queue
+MouseRecorderApp._heartbeat_tick = _v153_heartbeat_tick
+MouseRecorderApp._watchdog_loop = _v153_watchdog_loop
+MouseRecorderApp.on_close = _v153_on_close
