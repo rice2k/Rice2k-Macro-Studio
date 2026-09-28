@@ -1,0 +1,103 @@
+# Rice2k Macro Studio v1.5.7 — Compact Window + Next Run Countdown
+
+APP_VERSION = "1.5.7 Compact Window + Next Run Countdown"
+
+_v157_prev_init = MouseRecorderApp.__init__
+def _v157_init(self, *args, **kwargs):
+    _v157_prev_init(self, *args, **kwargs)
+    try:
+        self.geometry("1060x700")
+        self.minsize(720, 500)
+        self.resizable(True, True)
+        self.attributes("-topmost", False)
+    except Exception:
+        pass
+
+
+_v157_prev_show_floating = MouseRecorderApp.show_floating
+def _v157_show_floating(self):
+    _v157_prev_show_floating(self)
+    try:
+        if self.floating and self.floating.winfo_exists():
+            self.floating.attributes("-topmost", False)
+    except Exception:
+        pass
+
+
+# Suppress the older forced lift() during Stop + Save so the main window does
+# not jump/stick in front of another application when recording ends.
+_v157_prev_stop_recording = MouseRecorderApp.stop_recording
+def _v157_stop_recording(self):
+    original_lift = self.lift
+    try:
+        self.lift = lambda *a, **k: None
+        return _v157_prev_stop_recording(self)
+    finally:
+        self.lift = original_lift
+        try:
+            self.attributes("-topmost", False)
+        except Exception:
+            pass
+
+
+_v157_prev_set_status = MouseRecorderApp.set_status
+def _v157_set_status(self, text):
+    _v157_prev_set_status(self, text)
+    if text.startswith("Next run in ") or text.startswith("Starting in ") or text.startswith("Playing run "):
+        try:
+            self.after(0, self.playback_var.set, text)
+        except Exception:
+            pass
+    elif text in {"Ready", "Stopped", "Stopped / Ready"}:
+        try:
+            self.after(0, self.playback_var.set, "Ready")
+        except Exception:
+            pass
+
+
+# Intercept only the repeat-delay wait. Existing action timing still uses the
+# original interruptible wait unchanged.
+_v157_prev_wait_interruptible = RecorderEngine._wait_interruptible
+def _v157_wait_interruptible(self, seconds):
+    try:
+        seconds = max(0.0, float(seconds))
+        between = max(0.0, float(self.settings.get("delay_minutes", 0.0)) * 60.0)
+        if (
+            between >= 1.0
+            and abs(seconds - between) < 0.0001
+            and self.state in {STATE_PLAYING, STATE_PLAYING_PAUSED}
+        ):
+            deadline = time.monotonic() + seconds
+            while not self.stop_event.is_set():
+                remaining = max(0.0, deadline - time.monotonic())
+                if remaining <= 0:
+                    return True
+                whole = int(remaining + 0.999999)
+                mins, secs = divmod(whole, 60)
+                self.status_callback(f"Next run in {mins:02d}:{secs:02d}")
+                if not _v157_prev_wait_interruptible(self, min(1.0, remaining)):
+                    return False
+            return False
+    except Exception:
+        pass
+    return _v157_prev_wait_interruptible(self, seconds)
+
+
+_v157_prev_runner_source = MouseRecorderApp._standalone_runner_source
+def _v157_runner_source(self, actions, recording_name="Rice2k Macro"):
+    source = _v157_prev_runner_source(self, actions, recording_name)
+    source = source.replace('root.geometry("530x330")', 'root.geometry("500x310")')
+    source = source.replace('root.minsize(480, 300)', 'root.minsize(420, 270)')
+    old = '''            if run + 1 < repeats and between and not stop_event.is_set():\n                set_status(f"Waiting {between / 60.0:g} min")\n                if not wait_interruptible(between): break\n                set_status("Playing")\n'''
+    new = '''            if run + 1 < repeats and between and not stop_event.is_set():\n                deadline = time.monotonic() + between\n                while not stop_event.is_set():\n                    remaining = max(0.0, deadline - time.monotonic())\n                    if remaining <= 0: break\n                    whole = int(remaining + 0.999999)\n                    mins, secs = divmod(whole, 60)\n                    set_status(f"Next run in {mins:02d}:{secs:02d}")\n                    if not wait_interruptible(min(1.0, remaining)): break\n                if stop_event.is_set(): break\n                set_status("Playing")\n'''
+    if old in source:
+        source = source.replace(old, new, 1)
+    return source
+
+
+MouseRecorderApp.__init__ = _v157_init
+MouseRecorderApp.show_floating = _v157_show_floating
+MouseRecorderApp.stop_recording = _v157_stop_recording
+MouseRecorderApp.set_status = _v157_set_status
+MouseRecorderApp._standalone_runner_source = _v157_runner_source
+RecorderEngine._wait_interruptible = _v157_wait_interruptible
