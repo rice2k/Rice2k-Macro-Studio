@@ -1,28 +1,28 @@
 {
   "project": "Rice2k-Macro-Studio",
-  "version": "1.5.6 Minute Delay",
-  "validated_at": "2026-09-22T00:52:00-04:00",
+  "version": "1.5.7 Compact Window + Next Run Countdown",
+  "validated_at": "2026-09-28T12:15:00-04:00",
   "checks": [
     {"name": "Python compile", "status": "PASS", "detail": ""},
-    {"name": "Module import", "status": "PASS", "detail": "1.5.6 Minute Delay"},
-    {"name": "Legacy 480-second settings migration", "status": "PASS", "detail": "480 seconds -> 8.0 minutes"},
-    {"name": "Legacy 30-second settings migration", "status": "PASS", "detail": "30 seconds -> 0.5 minutes"},
-    {"name": "8-minute runtime conversion", "status": "PASS", "detail": "8 minutes -> 480 seconds internal wait"},
-    {"name": "Dashboard minute label", "status": "PASS", "detail": "Delay between runs (min)"},
-    {"name": "Dashboard minute setting persistence", "status": "PASS", "detail": "delay_minutes saved; legacy delay_seconds removed"},
-    {"name": "Typed delay save binding", "status": "PASS", "detail": "FocusOut and Return persist the entered minute value"},
-    {"name": "Standalone EXE runner minute label", "status": "PASS", "detail": "Delay between runs (min)"},
-    {"name": "Standalone EXE runner minute conversion", "status": "PASS", "detail": "minutes multiplied by 60 at runtime"},
-    {"name": "Standalone EXE runner source compile", "status": "PASS", "detail": ""},
     {"name": "GUI startup self-test", "status": "PASS", "detail": "RICE2K_STARTUP_SELF_TEST_OK"},
-    {"name": "Dark / Neo Green / Soft Light primary pages", "status": "PASS", "detail": "all major pages opened"},
-    {"name": "Per-action editor timing retained", "status": "PASS", "detail": "individual action timing remains seconds"},
+    {"name": "Default window size", "status": "PASS", "detail": "1060x700"},
+    {"name": "Minimum window size", "status": "PASS", "detail": "720x500"},
+    {"name": "Shrink to 720x500", "status": "PASS", "detail": "all primary pages opened"},
+    {"name": "Dark / Neo Green / Soft Light at small size", "status": "PASS", "detail": "30 page/theme checks"},
+    {"name": "Main window topmost disabled", "status": "PASS", "detail": "-topmost=0"},
+    {"name": "Recording mini topmost disabled", "status": "PASS", "detail": "-topmost=0"},
+    {"name": "Forced lift behavior suppressed", "status": "PASS", "detail": "Stop + Save no longer forces the app in front"},
+    {"name": "Playback-card countdown display", "status": "PASS", "detail": "Next run in 00:09"},
+    {"name": "3-second engine countdown", "status": "PASS", "detail": "00:03, 00:02, 00:01; elapsed 3.01s"},
+    {"name": "Standalone runner countdown", "status": "PASS", "detail": "MM:SS countdown marker present"},
+    {"name": "Standalone runner compact size", "status": "PASS", "detail": "500x310 minimum 420x270"},
+    {"name": "Standalone runner source compile", "status": "PASS", "detail": ""},
     {"name": "ZIP integrity", "status": "PASS", "detail": ""}
   ],
   "behavior_notes": [
-    "Delay between repeated runs is configured in minutes.",
-    "The playback engine converts minutes to seconds only when it performs the wait.",
-    "Existing delay_seconds settings are migrated automatically.",
-    "The individual Raw Action Editor delay remains measured in seconds."
+    "Repeat delays remain configured in minutes.",
+    "Playback Status shows a live MM:SS countdown during repeat delays.",
+    "The main app and recording mini-controller are no longer forced always-on-top.",
+    "Major pages remain scrollable when the application is shrunk."
   ]
 }
