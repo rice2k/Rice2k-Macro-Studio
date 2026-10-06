@@ -4,56 +4,65 @@ on:
   push:
     branches:
       - chatgpt-v1.6.0-full-build
+    paths-ignore:
+      - "builds/**"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out source
-        uses: actions/checkout@v4
+      - name: Download branch source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -L --fail             -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer $GH_TOKEN"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/$GITHUB_REPOSITORY/zipball/$GITHUB_SHA"             -o source.zip
+          mkdir source
+          unzip -q source.zip -d source
+          ROOT="$(find source -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$ROOT"
+          echo "SOURCE_ROOT=$ROOT" >> "$GITHUB_ENV"
 
-      - name: Verify reconstructed application source
+      - name: Verify and package full source
         shell: bash
         run: |
+          set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          root = Path(".")
+          import os, zipfile
+
+          root = Path(os.environ["SOURCE_ROOT"])
           parts = sorted((root / "src_fragments").glob("part_*.pyfrag"))
           if len(parts) != 14:
               raise SystemExit(f"Expected 14 source fragments, found {len(parts)}")
+
           source = "".join(p.read_text(encoding="utf-8") for p in parts)
           marker = '\nif __name__ == "__main__":\n    main()'
           if marker not in source:
-              raise SystemExit("main() marker missing")
+              raise SystemExit("main() marker missing from reconstructed source")
+
           patches = sorted((root / "src_patches").glob("*.pyfrag"))
           patch_text = "\n\n".join(p.read_text(encoding="utf-8") for p in patches)
           source = source.replace(marker, "\n\n" + patch_text + "\n\n" + marker, 1)
           compile(source, "rice2k_macro_studio_full.py", "exec")
           print(f"Compile OK: {len(parts)} fragments + {len(patches)} patches")
-          PY
 
-      - name: Create complete source ZIP
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import zipfile
-
-          root = Path(".")
-          out = root / "Rice2k-Macro-Studio-v1.6.0-FULL-WORKING-SOURCE.zip"
-          exclude_dirs = {".git", ".github", "__pycache__"}
+          out = Path("Rice2k-Macro-Studio-v1.6.0-FULL-WORKING-SOURCE.zip")
+          prefix = Path("Rice2k-Macro-Studio-v1.6.0")
+          excluded = {".git", ".github", "__pycache__", "builds"}
           with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
               for p in sorted(root.rglob("*")):
                   if not p.is_file():
                       continue
-                  if p == out:
+                  rel = p.relative_to(root)
+                  if any(part in excluded for part in rel.parts):
                       continue
-                  if any(part in exclude_dirs for part in p.parts):
-                      continue
-                  z.write(p, Path("Rice2k-Macro-Studio-v1.6.0") / p)
+                  z.write(p, prefix / rel)
+
           with zipfile.ZipFile(out, "r") as z:
               bad = z.testzip()
               if bad:
@@ -69,13 +78,41 @@ jobs:
               missing = sorted(required - names)
               if missing:
                   raise SystemExit("Missing required files: " + ", ".join(missing))
-              print(f"ZIP OK: {len(names)} files")
+              print(f"ZIP OK: {len(names)} files, {out.stat().st_size} bytes")
           PY
 
-      - name: Upload complete package
-        uses: actions/upload-artifact@v4
-        with:
-          name: Rice2k-Macro-Studio-v1.6.0-FULL-WORKING-SOURCE
-          path: Rice2k-Macro-Studio-v1.6.0-FULL-WORKING-SOURCE.zip
-          if-no-files-found: error
-          retention-days: 7
+      - name: Publish package to build branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, json, os, urllib.request
+          from pathlib import Path
+
+          path = Path("Rice2k-Macro-Studio-v1.6.0-FULL-WORKING-SOURCE.zip")
+          api = (
+              f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}"
+              "/contents/builds/Rice2k-Macro-Studio-v1.6.0-FULL-WORKING-SOURCE.zip"
+          )
+          payload = {
+              "message": "Publish Rice2k Macro Studio v1.6.0 full source package",
+              "content": base64.b64encode(path.read_bytes()).decode("ascii"),
+              "branch": os.environ["GITHUB_REF_NAME"],
+          }
+          req = urllib.request.Request(
+              api,
+              data=json.dumps(payload).encode("utf-8"),
+              method="PUT",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "X-GitHub-Api-Version": "2022-11-28",
+                  "Content-Type": "application/json",
+              },
+          )
+          with urllib.request.urlopen(req, timeout=60) as response:
+              result = json.load(response)
+          print(result.get("content", {}).get("download_url", "published"))
+          PY
