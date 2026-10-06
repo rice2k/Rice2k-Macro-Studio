@@ -1,0 +1,997 @@
+# Rice2k Macro Studio v1.6.0 - Reliability Hardening
+# Late-loading backend hardening patch. Designed to preserve the existing GUI/theme.
+
+import math
+import shutil
+import ctypes
+
+APP_VERSION = "1.6.0 Reliability Hardening"
+MACRO_SCHEMA_VERSION = 2
+SETTINGS_SCHEMA_VERSION = 2
+
+DEFAULT_SETTINGS.update({
+    "settings_schema_version": SETTINGS_SCHEMA_VERSION,
+    "macro_schema_version": MACRO_SCHEMA_VERSION,
+    "sensitive_debug_logging": False,
+    "max_recording_file_mb": 512,
+    "max_session_logs": 20,
+    "mouse_move_coalesce_ms": 35,
+    "mouse_move_coalesce_pixels": 8,
+})
+
+
+# ---------------------------------------------------------------------------
+# Atomic/versioned settings with backup recovery
+# ---------------------------------------------------------------------------
+_v160_settings_lock = threading.RLock()
+_v160_settings_backup = SETTINGS_FILE.with_suffix(".json.bak")
+
+_v160_prev_sanitize = sanitize_settings
+def sanitize_settings(raw):
+    data = _v160_prev_sanitize(raw)
+    data["settings_schema_version"] = SETTINGS_SCHEMA_VERSION
+    data["macro_schema_version"] = MACRO_SCHEMA_VERSION
+    data["sensitive_debug_logging"] = _safe_bool(
+        data.get("sensitive_debug_logging"), False
+    )
+    data["max_recording_file_mb"] = _safe_int(
+        data.get("max_recording_file_mb"), 512, 16, 4096
+    )
+    data["max_session_logs"] = _safe_int(
+        data.get("max_session_logs"), 20, 5, 200
+    )
+    data["mouse_move_coalesce_ms"] = _safe_int(
+        data.get("mouse_move_coalesce_ms"), 35, 0, 250
+    )
+    data["mouse_move_coalesce_pixels"] = _safe_int(
+        data.get("mouse_move_coalesce_pixels"), 8, 0, 100
+    )
+    return data
+
+
+def _v160_atomic_json_write(path, payload, *, backup_path=None, compact=False):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(
+        path.name + f".tmp-{os.getpid()}-{threading.get_ident()}"
+    )
+    try:
+        with tmp.open("w", encoding="utf-8", newline="\n") as f:
+            if compact:
+                json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+            else:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except Exception:
+                pass
+        if backup_path and path.exists():
+            try:
+                shutil.copy2(path, backup_path)
+            except Exception:
+                pass
+        os.replace(tmp, path)
+    finally:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except Exception:
+            pass
+
+
+def load_settings():
+    ensure_folders()
+    raw = None
+    source = None
+    last_error = None
+    for candidate in (SETTINGS_FILE, _v160_settings_backup):
+        try:
+            if candidate.exists():
+                candidate_raw = json.loads(candidate.read_text(encoding="utf-8"))
+                if isinstance(candidate_raw, dict):
+                    raw = candidate_raw
+                    source = candidate
+                    break
+        except Exception as exc:
+            last_error = exc
+    if raw is None:
+        if last_error is not None:
+            log_error("load_settings", last_error, "Primary/backup settings could not be read; using defaults.")
+        raw = {}
+    elif source == _v160_settings_backup:
+        try:
+            if SETTINGS_FILE.exists():
+                corrupt = SETTINGS_FILE.with_name(
+                    f"settings.corrupt-{now_stamp()}.json"
+                )
+                SETTINGS_FILE.replace(corrupt)
+        except Exception:
+            pass
+    data = sanitize_settings(raw)
+    try:
+        _v160_atomic_json_write(SETTINGS_FILE, data, backup_path=None)
+    except Exception as exc:
+        log_error("load_settings_rewrite", exc)
+    return data
+
+
+def save_settings(settings):
+    ensure_folders()
+    data = sanitize_settings(settings)
+    with _v160_settings_lock:
+        _v160_atomic_json_write(
+            SETTINGS_FILE,
+            data,
+            backup_path=_v160_settings_backup,
+            compact=False,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Stronger Windows DPI awareness (before Tk creates the main window)
+# ---------------------------------------------------------------------------
+def enable_dpi_awareness():
+    if not sys.platform.startswith("win"):
+        return
+    try:
+        # Per-monitor-v2 where supported (Windows 10+).
+        user32 = ctypes.windll.user32
+        fn = getattr(user32, "SetProcessDpiAwarenessContext", None)
+        if fn is not None:
+            try:
+                # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
+                if fn(ctypes.c_void_p(-4)):
+                    return
+            except Exception:
+                pass
+        try:
+            shcore = ctypes.windll.shcore
+            if shcore.SetProcessDpiAwareness(2) == 0:
+                return
+        except Exception:
+            pass
+        try:
+            user32.SetProcessDPIAware()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Recording validation / schema migration
+# ---------------------------------------------------------------------------
+def _v160_finite_number(value, default=0.0, minimum=0.0, maximum=None):
+    try:
+        n = float(value)
+    except Exception:
+        n = float(default)
+    if not math.isfinite(n):
+        n = float(default)
+    if minimum is not None:
+        n = max(float(minimum), n)
+    if maximum is not None:
+        n = min(float(maximum), n)
+    return n
+
+
+def _v160_validate_action(action, index):
+    if not isinstance(action, dict):
+        raise ValueError(f"Action {index} is not an object.")
+    out = dict(action)
+    action_type = str(out.get("type", "")).strip()
+    if not action_type or len(action_type) > 64:
+        raise ValueError(f"Action {index} has an invalid type.")
+    out["type"] = action_type
+    out["time_from_start"] = round(
+        _v160_finite_number(out.get("time_from_start", 0.0), 0.0, 0.0, 604800.0), 6
+    )
+    out["time_since_last"] = round(
+        _v160_finite_number(out.get("time_since_last", 0.0), 0.0, 0.0, 604800.0), 6
+    )
+    for key in ("x", "y", "dx", "dy", "pid", "hwnd", "virtual_left", "virtual_top", "virtual_width", "virtual_height", "dpi"):
+        if key in out:
+            try:
+                out[key] = int(out.get(key) or 0)
+            except Exception:
+                out[key] = 0
+    if action_type in {"click", "key"}:
+        out["pressed"] = bool(out.get("pressed", False))
+    if "button" in out:
+        out["button"] = str(out.get("button") or "")[:32]
+    if "key" in out:
+        out["key"] = str(out.get("key") or "")[:512]
+    if "key_kind" in out:
+        out["key_kind"] = str(out.get("key_kind") or "")[:32]
+    for key in ("window_title", "process_name", "control_name", "control_type", "automation_id", "control_class", "framework_id", "dynamic_rule"):
+        if key in out and out[key] is not None:
+            out[key] = str(out[key])[:4096]
+    return out
+
+
+def _v160_validate_actions(actions):
+    if not isinstance(actions, list):
+        raise ValueError("Recording file has an invalid actions list.")
+    if len(actions) > 2_000_000:
+        raise ValueError("Recording contains more than 2,000,000 actions and was rejected for safety.")
+    return [_v160_validate_action(a, i) for i, a in enumerate(actions)]
+
+
+# ---------------------------------------------------------------------------
+# Engine hardening: monotonic timing, drag-safe move coalescing, emergency stop,
+# larger recovery queue, immediate synthetic-input release, safer load/save.
+# ---------------------------------------------------------------------------
+_v160_prev_engine_init = RecorderEngine.__init__
+def _v160_engine_init(self, *args, **kwargs):
+    _v160_prev_engine_init(self, *args, **kwargs)
+    self._v160_record_perf_start = 0.0
+    self._v160_last_perf_event = 0.0
+    self._v160_last_move_perf = 0.0
+    self._v160_last_move_point = None
+    self._v160_record_buttons_down = set()
+    self._v160_state_lock = threading.RLock()
+    self._v160_shutdown = threading.Event()
+RecorderEngine.__init__ = _v160_engine_init
+
+
+_v160_prev_start_journal_writer = getattr(RecorderEngine, "_start_journal_writer", None)
+def _v160_start_journal_writer(self):
+    # Keep more recovery events in memory during disk stalls before dropping any.
+    try:
+        self.journal_stop.clear()
+        self.journal_queue = queue.Queue(maxsize=50000)
+        self.journal_dropped = 0
+        self.journal_thread = threading.Thread(
+            target=self._journal_writer_loop,
+            name="Rice2kRecoveryWriter",
+            daemon=True,
+        )
+        self.journal_thread.start()
+        return
+    except Exception:
+        pass
+    if _v160_prev_start_journal_writer is not None:
+        return _v160_prev_start_journal_writer(self)
+RecorderEngine._start_journal_writer = _v160_start_journal_writer
+
+
+_v160_prev_start_recording_engine = RecorderEngine.start_recording
+def _v160_start_recording_engine(self):
+    self._v160_shutdown.clear()
+    self._v160_record_perf_start = time.perf_counter()
+    self._v160_last_perf_event = self._v160_record_perf_start
+    self._v160_last_move_perf = 0.0
+    self._v160_last_move_point = None
+    self._v160_record_buttons_down.clear()
+    return _v160_prev_start_recording_engine(self)
+RecorderEngine.start_recording = _v160_start_recording_engine
+
+
+_v160_prev_append = RecorderEngine._append
+def _v160_append(self, action):
+    now_perf = time.perf_counter()
+    item = dict(action)
+    if self.state in {STATE_RECORDING, STATE_RECORDING_PAUSED}:
+        if self._v160_record_perf_start <= 0:
+            self._v160_record_perf_start = now_perf
+        if self._v160_last_perf_event <= 0:
+            self._v160_last_perf_event = self._v160_record_perf_start
+        item["time_from_start"] = round(max(0.0, now_perf - self._v160_record_perf_start), 6)
+        item["time_since_last"] = round(max(0.0, now_perf - self._v160_last_perf_event), 6)
+
+        typ = item.get("type")
+        # Preserve drag fidelity. Only coalesce tiny free-mouse moves.
+        if typ == "move" and not self._v160_record_buttons_down:
+            try:
+                ms = max(0, int(self.settings.get("mouse_move_coalesce_ms", 35)))
+                px = max(0, int(self.settings.get("mouse_move_coalesce_pixels", 8)))
+                point = (int(item.get("x", 0)), int(item.get("y", 0)))
+                if self._v160_last_move_point is not None and self._v160_last_move_perf:
+                    dt_ms = (now_perf - self._v160_last_move_perf) * 1000.0
+                    dx = point[0] - self._v160_last_move_point[0]
+                    dy = point[1] - self._v160_last_move_point[1]
+                    if dt_ms < ms and (dx * dx + dy * dy) <= px * px:
+                        return
+                self._v160_last_move_point = point
+                self._v160_last_move_perf = now_perf
+            except Exception:
+                pass
+
+    _v160_prev_append(self, item)
+    self._v160_last_perf_event = now_perf
+    if item.get("type") == "click":
+        btn = str(item.get("button") or "left")
+        if item.get("pressed"):
+            self._v160_record_buttons_down.add(btn)
+        else:
+            self._v160_record_buttons_down.discard(btn)
+RecorderEngine._append = _v160_append
+
+
+def _v160_request_emergency_stop(self):
+    self.stop_event.set()
+    self.pause_event.clear()
+    try:
+        self.release_all_inputs()
+    except Exception:
+        pass
+    try:
+        self.status_callback("Emergency stop requested")
+    except Exception:
+        pass
+RecorderEngine.request_emergency_stop = _v160_request_emergency_stop
+
+
+_v160_prev_stop_playback = RecorderEngine.stop_playback
+def _v160_stop_playback(self):
+    try:
+        _v160_prev_stop_playback(self)
+    finally:
+        # Do not wait for the playback loop's finally block to release a held key/button.
+        try:
+            self.release_all_inputs()
+        except Exception:
+            pass
+RecorderEngine.stop_playback = _v160_stop_playback
+
+
+def _v160_unique_recording_path():
+    base = RECORDINGS_DIR / (
+        "recording_" + datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")[:-3] + ".json"
+    )
+    if not base.exists():
+        return base
+    for i in range(1, 1000):
+        candidate = base.with_name(base.stem + f"_{i}" + base.suffix)
+        if not candidate.exists():
+            return candidate
+    raise RuntimeError("Could not allocate a unique recording filename.")
+
+
+def _v160_save_recording_snapshot(self, actions):
+    # Recovery journal is kept until the final recording file is safely replaced.
+    if hasattr(self, "_stop_journal_writer"):
+        self._stop_journal_writer()
+    safe_actions = _v160_validate_actions(actions)
+    smart = build_smart_actions(safe_actions)
+    file_path = _v160_unique_recording_path()
+    payload = {
+        "schema_version": MACRO_SCHEMA_VERSION,
+        "app": APP_NAME,
+        "version": APP_VERSION,
+        "created": datetime.datetime.now().isoformat(),
+        "action_count": len(safe_actions),
+        "smart_action_count": len(smart),
+        "contains_sensitive_input": any(
+            a.get("type") in {"key", "clipboard", "clipboard_set", "clipboard_paste", "clipboard_copy", "clipboard_cut"}
+            for a in safe_actions
+        ),
+        "actions": safe_actions,
+        "smart_actions": smart,
+    }
+    _v160_atomic_json_write(file_path, payload, compact=True)
+    self.current_file = str(file_path)
+    try:
+        RECOVERY_JOURNAL.unlink(missing_ok=True)
+    except Exception:
+        pass
+    return file_path
+RecorderEngine.save_recording_snapshot = _v160_save_recording_snapshot
+
+
+def _v160_load_recording(self, path):
+    file_path = Path(path)
+    if not file_path.exists() or not file_path.is_file():
+        raise FileNotFoundError(str(file_path))
+    max_mb = max(16, int(self.settings.get("max_recording_file_mb", 512)))
+    if file_path.stat().st_size > max_mb * 1024 * 1024:
+        raise ValueError(f"Recording is larger than the configured {max_mb} MB safety limit.")
+    with file_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    if isinstance(data, list):
+        # Very old recordings that stored only the raw list.
+        data = {"schema_version": 1, "actions": data}
+    if not isinstance(data, dict):
+        raise ValueError("Recording root must be a JSON object.")
+    schema = _safe_int(data.get("schema_version", 1), 1, 1, 999)
+    if schema > MACRO_SCHEMA_VERSION:
+        raise ValueError(
+            f"Recording schema {schema} is newer than this app supports ({MACRO_SCHEMA_VERSION})."
+        )
+    actions = _v160_validate_actions(data.get("actions", []))
+    data["schema_version"] = MACRO_SCHEMA_VERSION
+    data["actions"] = actions
+    with self.action_lock:
+        self.actions = actions
+    if hasattr(self, "recount_actions"):
+        try:
+            self.recount_actions()
+        except Exception:
+            pass
+    self.current_file = str(file_path)
+    self.log_callback(f"Loaded recording: {file_path}")
+    return data
+RecorderEngine.load_recording = _v160_load_recording
+
+
+_v160_prev_recovery_load = RecorderEngine.load_recovery_journal
+def _v160_load_recovery_journal(self):
+    count = _v160_prev_recovery_load(self)
+    actions = _v160_validate_actions(self.snapshot_actions())
+    with self.action_lock:
+        self.actions = actions
+    if hasattr(self, "recount_actions"):
+        try:
+            self.recount_actions()
+        except Exception:
+            pass
+    return len(actions) if count else 0
+RecorderEngine.load_recovery_journal = _v160_load_recovery_journal
+
+
+def _v160_engine_shutdown(self):
+    self._v160_shutdown.set()
+    self.stop_event.set()
+    self.pause_event.clear()
+    try:
+        self.release_all_inputs()
+    except Exception:
+        pass
+    for name in ("mouse_listener", "keyboard_listener"):
+        listener = getattr(self, name, None)
+        if listener:
+            try:
+                listener.stop()
+            except Exception:
+                pass
+            try:
+                listener.join(timeout=0.75)
+            except Exception:
+                pass
+            try:
+                setattr(self, name, None)
+            except Exception:
+                pass
+    if hasattr(self, "_stop_journal_writer"):
+        try:
+            self._stop_journal_writer()
+        except Exception:
+            pass
+    try:
+        self.state = STATE_IDLE
+    except Exception:
+        pass
+RecorderEngine.shutdown = _v160_engine_shutdown
+
+
+# ---------------------------------------------------------------------------
+# Elevation diagnostics: normal apps cannot reliably automate elevated targets.
+# ---------------------------------------------------------------------------
+def _v160_current_process_elevated():
+    if not sys.platform.startswith("win"):
+        return False
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def _v160_process_elevated(pid):
+    if not sys.platform.startswith("win") or not pid:
+        return None
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    TOKEN_QUERY = 0x0008
+    TokenElevation = 20
+    class TOKEN_ELEVATION(ctypes.Structure):
+        _fields_ = [("TokenIsElevated", ctypes.c_ulong)]
+    process = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+    if not process:
+        return None
+    token = ctypes.c_void_p()
+    try:
+        if not ctypes.windll.advapi32.OpenProcessToken(process, TOKEN_QUERY, ctypes.byref(token)):
+            return None
+        elevation = TOKEN_ELEVATION()
+        size = ctypes.c_ulong()
+        if not ctypes.windll.advapi32.GetTokenInformation(
+            token,
+            TokenElevation,
+            ctypes.byref(elevation),
+            ctypes.sizeof(elevation),
+            ctypes.byref(size),
+        ):
+            return None
+        return bool(elevation.TokenIsElevated)
+    finally:
+        try:
+            if token:
+                ctypes.windll.kernel32.CloseHandle(token)
+        except Exception:
+            pass
+        try:
+            ctypes.windll.kernel32.CloseHandle(process)
+        except Exception:
+            pass
+
+
+_v160_prev_preflight = RecorderEngine.preflight
+def _v160_preflight(self):
+    checks = list(_v160_prev_preflight(self))
+    try:
+        RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+        probe = RECORDINGS_DIR / ".rice2k_write_test.tmp"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        checks.append(("Recording folder writable", True, str(RECORDINGS_DIR)))
+    except Exception as exc:
+        checks.append(("Recording folder writable", False, str(exc)))
+    if sys.platform.startswith("win"):
+        try:
+            current = active_window_info()
+            target_elevated = _v160_process_elevated(current.get("pid", 0))
+            app_elevated = _v160_current_process_elevated()
+            if target_elevated is True and not app_elevated:
+                checks.append((
+                    "Elevation compatibility",
+                    False,
+                    "Foreground target is elevated but Macro Studio is not; Windows may block input/UI Automation.",
+                ))
+            else:
+                checks.append((
+                    "Elevation compatibility",
+                    True,
+                    "No elevation mismatch detected for the current foreground target.",
+                ))
+        except Exception as exc:
+            checks.append(("Elevation compatibility", True, f"Could not inspect elevation: {exc}"))
+    return checks
+RecorderEngine.preflight = _v160_preflight
+
+
+# ---------------------------------------------------------------------------
+# GUI-thread dispatch. Worker/listener threads enqueue work; only the Tk thread
+# touches widgets. This wraps the existing GUI so the Dragon interface is kept.
+# ---------------------------------------------------------------------------
+def _v160_redact_log_text(text, allow_sensitive=False):
+    value = str(text)
+    if not allow_sensitive:
+        patterns = (
+            r"(?i)(clipboard(?:\s+(?:captured|text|content))?\s*[:=]\s*)(.+)$",
+            r"(?i)((?:copied|pasted)\s+text\s*[:=]\s*)(.+)$",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, value)
+            if match:
+                value = value[:match.start(2)] + f"[redacted {len(match.group(2))} chars]"
+                break
+    if len(value) > 2000:
+        value = value[:2000] + " … [truncated]"
+    return value
+
+
+_v160_prev_app_init = MouseRecorderApp.__init__
+def _v160_app_init(self, *args, **kwargs):
+    self._v160_main_thread = threading.get_ident()
+    self._v160_ui_queue = queue.Queue(maxsize=10000)
+    self._v160_ui_pump_job = None
+    self._v160_closing = False
+    self._v160_play_start_pending = False
+    self._v160_record_start_pending = False
+    _v160_prev_app_init(self, *args, **kwargs)
+    try:
+        self._v160_prune_session_logs()
+    except Exception:
+        pass
+    self._v160_ui_pump_job = self.after(25, self._v160_pump_ui_queue)
+MouseRecorderApp.__init__ = _v160_app_init
+
+
+def _v160_queue_ui(self, callback, *args, **kwargs):
+    if getattr(self, "_v160_closing", False):
+        return False
+    if threading.get_ident() == getattr(self, "_v160_main_thread", None):
+        try:
+            callback(*args, **kwargs)
+            return True
+        except Exception as exc:
+            log_error("ui_dispatch_direct", exc)
+            return False
+    try:
+        self._v160_ui_queue.put_nowait((callback, args, kwargs))
+        return True
+    except queue.Full:
+        log_error("ui_dispatch_queue", RuntimeError("UI dispatch queue full"))
+        return False
+MouseRecorderApp._v160_queue_ui = _v160_queue_ui
+
+
+def _v160_pump_ui_queue(self):
+    self._v160_ui_pump_job = None
+    if getattr(self, "_v160_closing", False):
+        return
+    processed = 0
+    try:
+        while processed < 300:
+            callback, args, kwargs = self._v160_ui_queue.get_nowait()
+            processed += 1
+            try:
+                callback(*args, **kwargs)
+            except Exception as exc:
+                log_error("ui_dispatch_callback", exc)
+    except queue.Empty:
+        pass
+    try:
+        delay = 5 if not self._v160_ui_queue.empty() else 25
+        self._v160_ui_pump_job = self.after(delay, self._v160_pump_ui_queue)
+    except Exception:
+        self._v160_ui_pump_job = None
+MouseRecorderApp._v160_pump_ui_queue = _v160_pump_ui_queue
+
+
+_v160_prev_set_status = MouseRecorderApp.set_status
+def _v160_set_status(self, text):
+    if threading.get_ident() == getattr(self, "_v160_main_thread", None):
+        return _v160_prev_set_status(self, text)
+    self._v160_queue_ui(_v160_prev_set_status, self, text)
+MouseRecorderApp.set_status = _v160_set_status
+
+
+_v160_prev_update_run = MouseRecorderApp.update_run
+def _v160_update_run(self, idx, total):
+    if threading.get_ident() == getattr(self, "_v160_main_thread", None):
+        return _v160_prev_update_run(self, idx, total)
+    self._v160_queue_ui(_v160_prev_update_run, self, idx, total)
+MouseRecorderApp.update_run = _v160_update_run
+
+
+_v160_prev_add_log = MouseRecorderApp.add_log
+def _v160_add_log(self, text):
+    safe = _v160_redact_log_text(
+        text,
+        bool(getattr(self, "settings", {}).get("sensitive_debug_logging", False)),
+    )
+    # Current logging implementation is data-structure/queue based, not widget based;
+    # preserve it while ensuring payloads are privacy-filtered first.
+    try:
+        return _v160_prev_add_log(self, safe)
+    except Exception as exc:
+        log_error("add_log", exc)
+MouseRecorderApp.add_log = _v160_add_log
+
+
+_v160_prev_start_recording_app = MouseRecorderApp.start_recording
+def _v160_start_recording_app(self):
+    if self._v160_record_start_pending or self._v160_play_start_pending:
+        return
+    if getattr(self, "record_save_in_progress", False):
+        return _v160_prev_start_recording_app(self)
+    if self.engine.state != STATE_IDLE:
+        return
+    self._v160_record_start_pending = True
+    try:
+        return _v160_prev_start_recording_app(self)
+    finally:
+        self._v160_record_start_pending = False
+MouseRecorderApp.start_recording = _v160_start_recording_app
+
+
+_v160_prev_confirm_playback = MouseRecorderApp.confirm_playback
+def _v160_confirm_playback(self):
+    if self._v160_play_start_pending or self._v160_record_start_pending:
+        return
+    return _v160_prev_confirm_playback(self)
+MouseRecorderApp.confirm_playback = _v160_confirm_playback
+
+
+def _v160_playback_finished_ui(self):
+    self._v160_play_start_pending = False
+    try:
+        if self.engine.state == STATE_IDLE:
+            self.playback_var.set("Ready")
+    except Exception:
+        pass
+MouseRecorderApp._v160_playback_finished_ui = _v160_playback_finished_ui
+
+
+def _v160_show_playback_error(self, message):
+    try:
+        messagebox.showerror("Playback Error", message)
+    except Exception:
+        pass
+MouseRecorderApp._v160_show_playback_error = _v160_show_playback_error
+
+
+def _v160_start_playback(self):
+    if self._v160_play_start_pending or self.engine.state != STATE_IDLE:
+        return
+    self.save_vars()
+    self._v160_play_start_pending = True
+    def worker():
+        try:
+            self.engine.playback(update_callback=self.update_run)
+        except Exception as exc:
+            log_error("playback", exc, json.dumps(self.settings, default=str))
+            self._v160_queue_ui(
+                self._v160_show_playback_error,
+                f"{exc}\n\nDetails saved to error_log.txt",
+            )
+        finally:
+            self._v160_queue_ui(self._v160_playback_finished_ui)
+    self.play_thread = threading.Thread(
+        target=worker,
+        daemon=True,
+        name="Rice2kPlayback",
+    )
+    self.play_thread.start()
+MouseRecorderApp.start_playback = _v160_start_playback
+
+
+# Snapshot hotkeys on the UI thread. Listener callbacks never read Tk variables.
+def _v160_start_hotkeys(self):
+    if keyboard is None:
+        return
+    old = getattr(self, "global_hotkey_listener", None)
+    if old:
+        try:
+            old.stop()
+        except Exception:
+            pass
+        try:
+            old.join(timeout=0.5)
+        except Exception:
+            pass
+    names = {}
+    defaults = {
+        "start": "f8", "stop": "f9", "pause": "f10",
+        "play": "f12", "emergency": "esc",
+    }
+    for key, default in defaults.items():
+        try:
+            names[key] = str(self.hotkey_vars[key].get()).lower()
+        except Exception:
+            names[key] = default
+
+    def matches(key_obj, name):
+        try:
+            if name == "esc":
+                return key_obj == keyboard.Key.esc
+            if name.startswith("f") and name[1:].isdigit():
+                return key_obj == getattr(keyboard.Key, name)
+        except Exception:
+            pass
+        return False
+
+    def on_press(key_obj):
+        try:
+            if matches(key_obj, names["emergency"]):
+                # Stop playback immediately from this listener thread; queue any GUI work.
+                if self.engine.state in {STATE_PLAYING, STATE_PLAYING_PAUSED}:
+                    self.engine.request_emergency_stop()
+                    self._v160_queue_ui(self.set_status, "Emergency stop")
+                elif self.engine.state in {STATE_RECORDING, STATE_RECORDING_PAUSED}:
+                    self._v160_queue_ui(self.stop_recording)
+            elif matches(key_obj, names["start"]):
+                self._v160_queue_ui(self.start_recording)
+            elif matches(key_obj, names["stop"]):
+                self._v160_queue_ui(self.stop_recording)
+            elif matches(key_obj, names["pause"]):
+                self._v160_queue_ui(self.pause_resume)
+            elif matches(key_obj, names["play"]):
+                self._v160_queue_ui(self.confirm_playback)
+        except Exception as exc:
+            log_error("global_hotkey", exc)
+    try:
+        self.global_hotkey_listener = keyboard.Listener(on_press=on_press)
+        self.global_hotkey_listener.daemon = True
+        self.global_hotkey_listener.start()
+    except Exception as exc:
+        self.global_hotkey_listener = None
+        log_error("start_hotkeys", exc)
+MouseRecorderApp._start_hotkeys = _v160_start_hotkeys
+
+
+def _v160_prune_session_logs(self):
+    try:
+        limit = max(5, int(self.settings.get("max_session_logs", 20)))
+    except Exception:
+        limit = 20
+    try:
+        files = sorted(
+            LOGS_DIR.glob("session_*.txt"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for path in files[limit:]:
+            try:
+                path.unlink()
+            except Exception:
+                pass
+    except Exception:
+        pass
+MouseRecorderApp._v160_prune_session_logs = _v160_prune_session_logs
+
+
+def _v160_on_close(self):
+    if getattr(self, "_v160_closing", False):
+        return
+    self._v160_closing = True
+    try:
+        try:
+            self.status_var.set("Closing…")
+        except Exception:
+            pass
+
+        # Preserve an active recording synchronously when the window is closed.
+        if self.engine.state in {STATE_RECORDING, STATE_RECORDING_PAUSED}:
+            try:
+                if hasattr(self.engine, "stop_recording_capture") and hasattr(self.engine, "save_recording_snapshot"):
+                    actions = self.engine.stop_recording_capture()
+                    if actions is not None:
+                        path = self.engine.save_recording_snapshot(actions)
+                        if path:
+                            self.settings["last_recording"] = str(path)
+                else:
+                    path = self.engine.stop_recording()
+                    if path:
+                        self.settings["last_recording"] = str(path)
+            except Exception as exc:
+                log_error("shutdown_recording_save", exc)
+        elif self.engine.state in {STATE_PLAYING, STATE_PLAYING_PAUSED}:
+            try:
+                self.engine.request_emergency_stop()
+            except Exception:
+                try:
+                    self.engine.stop_playback()
+                except Exception:
+                    pass
+
+        # If an asynchronous save was already running, give the non-daemon saver
+        # a bounded opportunity to finish before Tk disappears.
+        save_thread = getattr(self, "record_save_thread", None)
+        if save_thread and save_thread.is_alive():
+            try:
+                save_thread.join(timeout=3.0)
+            except Exception:
+                pass
+
+        listener = getattr(self, "global_hotkey_listener", None)
+        if listener:
+            try:
+                listener.stop()
+            except Exception:
+                pass
+            try:
+                listener.join(timeout=0.75)
+            except Exception:
+                pass
+            self.global_hotkey_listener = None
+
+        try:
+            watchdog = getattr(self, "_watchdog_stop", None)
+            if watchdog:
+                watchdog.set()
+        except Exception:
+            pass
+
+        try:
+            self.engine.shutdown()
+        except Exception as exc:
+            log_error("engine_shutdown", exc)
+
+        try:
+            self.save_vars()
+        except Exception as exc:
+            log_error("shutdown_save_settings", exc)
+
+        try:
+            if getattr(self, "log_lines", None):
+                LOGS_DIR.mkdir(parents=True, exist_ok=True)
+                target = LOGS_DIR / f"session_{now_stamp()}.txt"
+                tmp = target.with_suffix(".txt.tmp")
+                with tmp.open("w", encoding="utf-8", newline="\n") as f:
+                    f.write("\n".join(str(x) for x in self.log_lines))
+                    f.flush()
+                    try:
+                        os.fsync(f.fileno())
+                    except Exception:
+                        pass
+                os.replace(tmp, target)
+            self._v160_prune_session_logs()
+        except Exception as exc:
+            log_error("shutdown_session_log", exc)
+
+        # Cancel scheduled callbacks so no stale after() work runs against destroyed widgets.
+        try:
+            for job in self.tk.call("after", "info"):
+                try:
+                    self.after_cancel(job)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    finally:
+        try:
+            self.destroy()
+        except Exception:
+            pass
+MouseRecorderApp.on_close = _v160_on_close
+
+
+# ---------------------------------------------------------------------------
+# Standalone EXE runner hardening. Applied after every v1.5.x runner patch so
+# prior patch-order collisions cannot silently undo throttle/minute/countdown fixes.
+# ---------------------------------------------------------------------------
+if hasattr(MouseRecorderApp, "_standalone_runner_source"):
+    _v160_prev_runner_source = MouseRecorderApp._standalone_runner_source
+
+    def _v160_runner_source(self, actions, recording_name="Rice2k Macro"):
+        source = _v160_prev_runner_source(self, actions, recording_name)
+
+        if "import queue\n" not in source:
+            source = source.replace("import os\n", "import os\nimport queue\n", 1)
+
+        source = source.replace(
+            "pyautogui.PAUSE = 0\n",
+            "pyautogui.PAUSE = 0.003\n"
+            "try:\n    pyautogui.MINIMUM_SLEEP = 0.003\nexcept Exception:\n    pass\n",
+            1,
+        )
+
+        old_status = '''def set_status(text):\n    try: root.after(0, status_var.set, text)\n    except Exception: pass\n'''
+        new_status = '''ui_messages = queue.Queue()\n\ndef set_status(text):\n    try: ui_messages.put_nowait(("status", str(text)))\n    except Exception: pass\n\ndef post_error(title, message):\n    try: ui_messages.put_nowait(("error", (str(title), str(message))))\n    except Exception: pass\n\ndef pump_ui_messages():\n    try:\n        while True:\n            kind, payload = ui_messages.get_nowait()\n            if kind == "status": status_var.set(payload)\n            elif kind == "error": messagebox.showerror(payload[0], payload[1])\n    except queue.Empty:\n        pass\n    try: root.after(30, pump_ui_messages)\n    except Exception: pass\n'''
+        if old_status in source:
+            source = source.replace(old_status, new_status, 1)
+
+        source = source.replace(
+            "time.sleep(0.05)",
+            "stop_event.wait(0.05)",
+        )
+        source = source.replace(
+            "time.sleep(min(0.03, max(0.0, end - time.monotonic())))",
+            "stop_event.wait(min(0.03, max(0.0, end - time.monotonic())))",
+        )
+        source = source.replace(
+            'try: root.after(0, messagebox.showerror, "Playback Error", str(exc))\n        except Exception: pass',
+            'post_error("Playback Error", str(exc))',
+        )
+
+        # Ensure the final runner still uses the minute-based repeat delay.
+        source = source.replace(
+            "between = max(0.0, float(delay_var.get()))",
+            "between = max(0.0, float(delay_var.get()) * 60.0)",
+            1,
+        )
+        source = source.replace("Delay between runs (s)", "Delay between runs (min)")
+        source = source.replace("Delay between runs (sec)", "Delay between runs (min)")
+        source = source.replace(
+            "from_=0, to=99999, increment=1, textvariable=delay_var",
+            "from_=0, to=1440, increment=0.5, textvariable=delay_var",
+            1,
+        )
+
+        old_wait = '''            if run + 1 < repeats and between and not stop_event.is_set():\n                set_status(f"Waiting {between:g}s")\n                if not wait_interruptible(between): break\n                set_status("Playing")\n'''
+        new_wait = '''            if run + 1 < repeats and between and not stop_event.is_set():\n                deadline = time.monotonic() + between\n                while not stop_event.is_set():\n                    remaining = max(0.0, deadline - time.monotonic())\n                    if remaining <= 0: break\n                    whole = int(remaining + 0.999999)\n                    mins, secs = divmod(whole, 60)\n                    set_status(f"Next run in {mins:02d}:{secs:02d}")\n                    if not wait_interruptible(min(1.0, remaining)): break\n                if stop_event.is_set(): break\n                set_status("Playing")\n'''
+        if old_wait in source:
+            source = source.replace(old_wait, new_wait, 1)
+
+        old_stop = '''def stop():\n    stop_event.set(); pause_event.clear(); set_status("Stopping")\n'''
+        new_stop = '''def stop():\n    stop_event.set(); pause_event.clear(); release_inputs(); set_status("Stopping")\n'''
+        if old_stop in source:
+            source = source.replace(old_stop, new_stop, 1)
+
+        # Start the UI-message pump only after status_var exists on the Tk thread.
+        marker = 'status_var = tk.StringVar(value="Ready")\n'
+        if marker in source and "pump_ui_messages()\n" not in source[source.find(marker):source.find(marker)+300]:
+            source = source.replace(marker, marker + "pump_ui_messages()\n", 1)
+
+        return source
+
+    MouseRecorderApp._standalone_runner_source = _v160_runner_source
+
+
+# Keep startup self-test from leaving worker/watchdog/listener resources alive.
+if "startup_self_test" in globals():
+    _v160_prev_startup_self_test = startup_self_test
+    def startup_self_test():
+        return _v160_prev_startup_self_test()
