@@ -22,7 +22,7 @@ echo ================================================================
 echo Python: %PY_EXE%
 echo.
 
-echo [1/6] Installing/updating build requirements...
+echo [1/7] Installing/updating build requirements...
 "%PY_EXE%" -m pip install --upgrade pip
 if errorlevel 1 goto :fail
 "%PY_EXE%" -m pip install -r requirements.txt
@@ -31,18 +31,29 @@ if errorlevel 1 goto :fail
 if errorlevel 1 goto :fail
 
 echo.
-echo [2/6] Validating full reconstructed application source...
+echo [2/7] Validating full reconstructed application source...
 "%PY_EXE%" -c "from pathlib import Path; parts=sorted(Path('src_fragments').glob('part_*.pyfrag')); patches=sorted(Path('src_patches').glob('*.pyfrag')); assert len(parts)==14, f'Expected 14 source fragments, found {len(parts)}'; s=''.join(p.read_text(encoding='utf-8') for p in parts); marker='\nif __name__ == \"__main__\":\n    main()'; assert marker in s, 'main marker missing'; s=s.replace(marker,'\n\n'+'\n\n'.join(p.read_text(encoding='utf-8') for p in patches)+'\n\n'+marker,1); compile(s,'rice2k_macro_studio_full.py','exec'); print(f'Compile OK: {len(parts)} fragments + {len(patches)} patches')"
 if errorlevel 1 goto :fail
 
 echo.
-echo [3/6] Removing stale PyInstaller output...
+echo [3/7] Preparing safe PNG/ICO build assets...
+if exist ".build_assets" rmdir /s /q ".build_assets"
+"%PY_EXE%" "prepare_build_assets.py"
+if errorlevel 1 (
+    echo ERROR: Could not prepare a valid Windows icon/build image.
+    goto :fail
+)
+if not exist ".build_assets\rice2k_macro_studio.ico" goto :fail
+if not exist ".build_assets\rice2k_macro_studio.png" goto :fail
+
+echo.
+echo [4/7] Removing stale PyInstaller output...
 if exist "build" rmdir /s /q "build"
 if exist "dist" rmdir /s /q "dist"
 if exist "Rice2k Macro Studio.spec" del /f /q "Rice2k Macro Studio.spec"
 
 echo.
-echo [4/6] Building EXE with protected Windows manifest...
+echo [5/7] Building EXE with protected Windows manifest...
 echo NOTE: This intentionally uses the console bootloader with --hide-console.
 echo       It avoids the PyInstaller windowed-bootloader Ordinal 380 failure.
 "%PY_EXE%" -m PyInstaller ^
@@ -54,8 +65,8 @@ echo       It avoids the PyInstaller windowed-bootloader Ordinal 380 failure.
   --noupx ^
   --name "Rice2k Macro Studio" ^
   --manifest "Rice2kMacroStudio.manifest" ^
-  --icon "rice2k_macro_studio.png" ^
-  --add-data "rice2k_macro_studio.png;." ^
+  --icon ".build_assets\rice2k_macro_studio.ico" ^
+  --add-data ".build_assets\rice2k_macro_studio.png;." ^
   --add-data "Browser_Element_Capture_Helper.html;." ^
   --add-data "src_fragments;src_fragments" ^
   --add-data "src_patches;src_patches" ^
@@ -68,7 +79,7 @@ if not exist "dist\Rice2k Macro Studio.exe" (
 )
 
 echo.
-echo [5/6] Running the built EXE startup self-test...
+echo [6/7] Running the built EXE startup self-test...
 "dist\Rice2k Macro Studio.exe" --startup-test
 set "TEST_EXIT=%ERRORLEVEL%"
 if not "%TEST_EXIT%"=="0" (
@@ -78,7 +89,7 @@ if not "%TEST_EXIT%"=="0" (
 )
 
 echo.
-echo [6/6] Build verified successfully.
+echo [7/7] Build verified successfully.
 echo.
 echo ================================================================
 echo   SUCCESS
