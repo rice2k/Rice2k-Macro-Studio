@@ -1,0 +1,81 @@
+name: Package Rice2k Macro Studio v1.6.0
+
+on:
+  push:
+    branches:
+      - chatgpt-v1.6.0-full-build
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Verify reconstructed application source
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          root = Path(".")
+          parts = sorted((root / "src_fragments").glob("part_*.pyfrag"))
+          if len(parts) != 14:
+              raise SystemExit(f"Expected 14 source fragments, found {len(parts)}")
+          source = "".join(p.read_text(encoding="utf-8") for p in parts)
+          marker = '\nif __name__ == "__main__":\n    main()'
+          if marker not in source:
+              raise SystemExit("main() marker missing")
+          patches = sorted((root / "src_patches").glob("*.pyfrag"))
+          patch_text = "\n\n".join(p.read_text(encoding="utf-8") for p in patches)
+          source = source.replace(marker, "\n\n" + patch_text + "\n\n" + marker, 1)
+          compile(source, "rice2k_macro_studio_full.py", "exec")
+          print(f"Compile OK: {len(parts)} fragments + {len(patches)} patches")
+          PY
+
+      - name: Create complete source ZIP
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+
+          root = Path(".")
+          out = root / "Rice2k-Macro-Studio-v1.6.0-FULL-WORKING-SOURCE.zip"
+          exclude_dirs = {".git", ".github", "__pycache__"}
+          with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+              for p in sorted(root.rglob("*")):
+                  if not p.is_file():
+                      continue
+                  if p == out:
+                      continue
+                  if any(part in exclude_dirs for part in p.parts):
+                      continue
+                  z.write(p, Path("Rice2k-Macro-Studio-v1.6.0") / p)
+          with zipfile.ZipFile(out, "r") as z:
+              bad = z.testzip()
+              if bad:
+                  raise SystemExit(f"ZIP integrity failure: {bad}")
+              names = set(z.namelist())
+              required = {
+                  "Rice2k-Macro-Studio-v1.6.0/rice2k_macro_studio.py",
+                  "Rice2k-Macro-Studio-v1.6.0/requirements.txt",
+                  "Rice2k-Macro-Studio-v1.6.0/src_fragments/part_01.pyfrag",
+                  "Rice2k-Macro-Studio-v1.6.0/src_fragments/part_14.pyfrag",
+                  "Rice2k-Macro-Studio-v1.6.0/src_patches/v1_6_0_reliability_hardening.pyfrag",
+              }
+              missing = sorted(required - names)
+              if missing:
+                  raise SystemExit("Missing required files: " + ", ".join(missing))
+              print(f"ZIP OK: {len(names)} files")
+          PY
+
+      - name: Upload complete package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rice2k-Macro-Studio-v1.6.0-FULL-WORKING-SOURCE
+          path: Rice2k-Macro-Studio-v1.6.0-FULL-WORKING-SOURCE.zip
+          if-no-files-found: error
+          retention-days: 7
