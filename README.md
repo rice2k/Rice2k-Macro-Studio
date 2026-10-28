@@ -177,3 +177,9 @@ Expected output: `dist\Rice2k Macro Studio.exe`
 Created by **Rice2k**.
 
 Repository: `rice2k/Rice2k-Macro-Studio`
+
+## Related Rice2K projects
+
+Browse Rice2K's other Windows automation, productivity, and desktop workflow projects.
+
+[Rice2K Magic Tasks](https://github.com/rice2k/rice2k-magic-tasks) · [RiceDeck browser dashboard](https://github.com/rice2k/rice2k-startdeck) · [Search automation projects](https://rice2k.github.io/rice2k-startdeck/projects/?q=automation)
